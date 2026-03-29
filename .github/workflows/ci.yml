@@ -1,0 +1,51 @@
+name: TypeScript CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # JOB 1: Local Build
+  fast-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./app
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest # You can pin a specific version here, e.g., '1.1.0'
+
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check Lint
+        run: bun run lint
+
+      - name: Check Compile
+        run: bun run build
+
+  # JOB 2: Docker Build & Integration Tests
+  docker-validation:
+    needs: fast-checks # Only run if lint/compile passes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 1. Check Docker Build
+      # This ensures your Dockerfile is valid and the app builds inside it.
+      - name: Build Docker Image
+        run: docker build --target dev -t ts-app-test:latest -f app/Dockerfile .
+
+      # 2. Run Tests ON the Docker Image
+      # This runs "bun test" inside the container you just built.
+      - name: Run Tests in Container
+        run: docker run --rm ts-app-test:latest bun test

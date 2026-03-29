@@ -1,0 +1,21 @@
+# Ignore all node_modules (each Dockerfile installs its own)
+**/node_modules
+
+# Git
+.git
+.gitignore
+
+# IDE / editor
+.cursor
+.vscode
+**/.DS_Store
+
+# Build artifacts
+app/.output
+app/dist
+
+# Lockfiles for db (not needed in image; services resolve db deps via file: link)
+db/bun.lock
+
+# Misc
+*.md

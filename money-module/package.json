@@ -1,0 +1,28 @@
+{
+  "name": "money-module",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "db:generate": "drizzle-kit generate --config ./db/drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config ./db/drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config ./db/drizzle.config.ts",
+    "db:push": "drizzle-kit push --config ./db/drizzle.config.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "drizzle-kit": "^0.30.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.38.0",
+    "postgres": "^3.4.0",
+    "tigerbeetle-node": "0.16.68",
+    "@grpc/grpc-js" : "^1.14.0"
+  },
+  "trustedDependencies": [
+    "tigerbeetle-node"
+  ]
+}

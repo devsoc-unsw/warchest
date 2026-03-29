@@ -1,0 +1,104 @@
+services:
+  warchest-dev-container:
+    container_name: warchest-dev-container
+    build:
+      context: .
+      dockerfile: Dockerfile
+    stdin_open: true
+    tty: true
+    ports:
+      # expose ports (3000 computer <-> 3000 on the container)
+      - "3000:3000"
+    volumes:
+      - ./:/root/warchest
+    environment:
+      - NODE_ENV=development
+      - BE_DATABASE_URL=postgres://postgres:password@postgres-be:5432/warchest
+      - MM_DATABASE_URL=postgres://postgres:password@postgres-mm:5432/money_module
+      - TIGERBEETLE_ADDRESS=tigerbeetle:3000
+    networks:
+      - warchest-network
+    depends_on:
+      postgres-be:
+        condition: service_healthy
+      postgres-mm:
+        condition: service_healthy
+      tigerbeetle:
+        condition: service_started
+
+  money_module:
+    build:
+      context: .
+      dockerfile: ./money-module/Dockerfile
+      target: dev
+    ports:
+      - "6767:6767"
+    volumes:
+      - ./money-module:/money-module
+      - /money-module/node_modules
+    security_opt:
+      # TigerBeetle client uses io_uring on Linux; default Docker seccomp can block it.
+      - seccomp:unconfined
+    networks:
+      - warchest-network
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:password@postgres-mm:5432/money_module
+      - TIGERBEETLE_ADDRESS=tigerbeetle:3000
+    depends_on:
+      postgres-mm:
+        condition: service_healthy
+      tigerbeetle:
+        condition: service_started
+
+  postgres-be:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: warchest
+    networks:
+      - warchest-network
+    volumes:
+      - postgres_be_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-mm:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: money_module
+    networks:
+      - warchest-network
+    volumes:
+      - postgres_mm_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  tigerbeetle:
+    build:
+      context: ./money-module/tigerbeetle
+      dockerfile: Dockerfile
+    networks:
+      - warchest-network
+    volumes:
+      - tigerbeetle_data:/data
+    security_opt:
+      - seccomp:unconfined
+
+volumes:
+  postgres_be_data:
+  postgres_mm_data:
+  tigerbeetle_data:
+
+networks:
+  warchest-network:
+    driver: bridge
