@@ -68,5 +68,8 @@ jobs:
       - name: Run Go Tests
         run: go test -v -race ./...
 
-      - name: Compile Go 
-        run: go build -v ./...
+      - name: Build Warchest 
+        run: go build -o bin/app ./cmd/app
+
+      - name: Build Money Module
+        run: go build -o bin/money-module ./cmd/money-module
