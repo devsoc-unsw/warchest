@@ -1,6 +1,8 @@
 package main
 
-import ("fmt")
+import (
+	"fmt"
+)
 
 /*	"google.golang.org/grpc"
 	. "github.com/tigerbeetle/tigerbeetle-go"

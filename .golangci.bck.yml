@@ -1,0 +1,60 @@
+# .golangci.yml
+
+# Options for analysis running
+run:
+  # Timeout for analysis, e.g. 30s, 5m, default is 1m
+  timeout: 5m
+
+# Output configuration options
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+# All available linters
+linters:
+  # Disable all linters first, then explicitly enable the ones we want.
+  # This prevents new linters in future updates from randomly breaking your CI.
+  disable-all: true
+  enable:
+    - errcheck     # Checks for unchecked errors
+    - gosimple     # Linter for Go source code that specializes in simplifying code
+    - govet        # Vet examines Go source code and reports suspicious constructs
+    - ineffassign  # Detects when assignments to existing variables are not used
+    - staticcheck  # A massive suite of static analysis checks (highly recommended)
+    - typecheck    # Like the front-end of a Go compiler, parses and type-checks Go code
+    - unused       # Checks Go code for unused constants, variables, functions and types
+    - gofmt        # Checks if code is formatted correctly
+    - goimports    # Does everything gofmt does, plus fixes imports
+    - misspell     # Finds commonly misspelled English words
+    - bodyclose    # Checks whether HTTP response body is closed successfully
+    - funlen       # Checks function length is capped
+    - lll          # Checks line length is 88
+
+# Specific settings for individual linters
+linters-settings:
+  govet:
+    # Enable shadow checking
+    enable:
+      - shadow
+  misspell:
+    # Choose between US or UK English
+    locale: UK
+  funlen:
+    lines: 88
+  lll:
+    line-length: 88
+    tab-width: 4
+
+# Configuration for issue processing (filtering)
+issues:
+  # Independently from option `exclude` we use default exclude patterns,
+  # it can be disabled by this option. To list all
+  # default patterns execute `golangci-lint run --help`
+  exclude-use-default: false
+  
+  # Exclude certain folders from being linted
+  exclude-dirs:
+    - vendor
+    - testdata

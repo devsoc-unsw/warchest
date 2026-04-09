@@ -12,7 +12,9 @@ RUN apt-get update && apt-get install -y \
     golang \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://bun.com/install | bash
+
 # default go tooling
+ENV PATH="/root/go/bin:${PATH}"
 RUN go install golang.org/x/tools/gopls@latest \
     && go install github.com/go-delve/delve/cmd/dlv@latest \
     && go install golang.org/x/tools/cmd/goimports@latest \
