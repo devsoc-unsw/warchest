@@ -30,6 +30,8 @@ linters:
     - misspell     # Finds commonly misspelled English words
     - bodyclose    # Checks whether HTTP response body is closed successfully
     - shadow       # Checks for shadowed variables
+    - funlen       # Checks function length is capped
+    - lll          # Checks line length is 88
 
 # Specific settings for individual linters
 linters-settings:
@@ -39,7 +41,12 @@ linters-settings:
       - shadow
   misspell:
     # Choose between US or UK English
-    locale: US
+    locale: UK
+  funlen:
+    lines: 88
+  lll:
+    line-length: 88
+    tab-width: 4
 
 # Configuration for issue processing (filtering)
 issues:

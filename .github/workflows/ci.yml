@@ -22,14 +22,29 @@ jobs:
         with:
           bun-version: latest # You can pin a specific version here, e.g., '1.1.0'
 
-      - name: Install Dependencies
+      - name: Install TypeScript Dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check Lint
+      - name: Check TypeScript Lint
         run: bun run lint
 
-      - name: Check Compile
+      - name: Check TypeScript Compile
         run: bun run build
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Install Go Dependencies
+        run: go mod download
+
+      - name: Check Go Lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
 
   # JOB 2: Docker Build & Integration Tests
   docker-validation:
@@ -47,5 +62,11 @@ jobs:
 
       # 2. Run Tests ON the Docker Image
       # This runs "bun test" inside the container you just built.
-      - name: Run Tests in Container
+      - name: Run TypeScript Tests in Container
         run: docker run --rm ts-app-test:latest bun test
+
+      - name: Run Go Tests
+        run: go test -v - race ./...
+
+      - name: Compile Go 
+        run: build -v ./...
