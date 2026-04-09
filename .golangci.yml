@@ -29,7 +29,6 @@ linters:
     - goimports    # Does everything gofmt does, plus fixes imports
     - misspell     # Finds commonly misspelled English words
     - bodyclose    # Checks whether HTTP response body is closed successfully
-    - shadow       # Checks for shadowed variables
     - funlen       # Checks function length is capped
     - lll          # Checks line length is 88
 
