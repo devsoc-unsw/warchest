@@ -1,14 +1,16 @@
 # syntax=docker/dockerfile:1
 # language which we use
-FROM oven/bun:1 AS base
+FROM golang:1.22-alpine AS base
 WORKDIR /money-module
 
 FROM base AS deps
-COPY money-module/package.json ./
-RUN bun install
+COPY money-module/go.mod money-module/go.sum ./
+RUN go mod download
+
 
 FROM base AS dev
-COPY --from=deps /money-module/node_modules ./node_modules
 COPY money-module/ .
-EXPOSE 6767 
-CMD ["bun", "run", "index.ts"]
+EXPOSE 6767
+
+
+CMD ["go", "run", "main.go"]
