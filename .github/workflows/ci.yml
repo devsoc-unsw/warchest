@@ -8,7 +8,7 @@ on:
 
 jobs:
   # JOB 1: Local Build
-  fast-checks frontend:
+  fast-checks-frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -31,7 +31,7 @@ jobs:
       - name: Check TypeScript Compile
         run: bun run build
 
-  fast-checks backend:
+  fast-checks-backend:
     runs-on: ubuntu-latest
     defaults:
       run:
