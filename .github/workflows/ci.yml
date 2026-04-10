@@ -8,11 +8,11 @@ on:
 
 jobs:
   # JOB 1: Local Build
-  fast-checks:
+  fast-checks frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./app
+        working-directory: ./frontend
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -30,7 +30,13 @@ jobs:
 
       - name: Check TypeScript Compile
         run: bun run build
-      
+
+  fast-checks backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./
+    steps: 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -72,4 +78,4 @@ jobs:
         run: go build -o bin/app ./cmd/app
 
       - name: Build Money Module
-        run: go build -o bin/money-module ./cmd/money-module
+        run: go build -v -o bin/money-module ./cmd/money-module
