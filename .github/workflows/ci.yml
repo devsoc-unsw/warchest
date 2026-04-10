@@ -54,7 +54,7 @@ jobs:
 
   # JOB 2: Docker Build & Integration Tests
   docker-validation:
-    needs: fast-checks # Only run if lint/compile passes
+    needs: fast-checks-frontend fast-checks-backend # Only run if lint/compile passes
     runs-on: ubuntu-latest
 
     steps:
