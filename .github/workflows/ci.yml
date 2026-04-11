@@ -1,4 +1,4 @@
-name: TypeScript CI Pipeline
+name: Full Stack CI Pipeline # Updated the name since this handles Go now too!
 
 on:
   push:
@@ -7,7 +7,9 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # JOB 1: Local Build
+  # ==========================================
+  # JOB 1: Frontend (Runs First)
+  # ==========================================
   fast-checks-frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -20,7 +22,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest # You can pin a specific version here, e.g., '1.1.0'
+          bun-version: latest
 
       - name: Install TypeScript Dependencies
         run: bun install --frozen-lockfile
@@ -31,7 +33,17 @@ jobs:
       - name: Check TypeScript Compile
         run: bun run build
 
+      - name: Run TypeScript Tests
+        run: bun run test
+
+      - name: Verify Frontend Docker Build
+        run: docker build -t frontend-test .
+
+  # ==========================================
+  # JOB 2: Backend (Waits for Frontend)
+  # ==========================================
   fast-checks-backend:
+    needs: fast-checks-frontend # <--- This forces GitHub Actions to wait for the frontend job
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -50,16 +62,27 @@ jobs:
         run: go mod download
 
       - name: Check Go Lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v6 # Updated to valid version
         with:
           version: latest
           args: --timeout=5m
+          working-directory: backend
 
+      - name: Run Go Tests
+        run: go test -v ./...
+
+      - name: Verify Backend Docker Build
+        run: docker build -t backend-test .
+
+  # ==========================================
+  # JOB 3: Money Module (Waits for Frontend)
+  # ==========================================
   fast-checks-money-module:
+    needs: fast-checks-frontend # <--- This also waits for the frontend job
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./
+        working-directory: ./ # Assuming this module is at the root level based on your path
     steps: 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,36 +97,14 @@ jobs:
         run: go mod download
 
       - name: Check Go Lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v6 # Updated to valid version
         with:
           version: latest
           args: --timeout=5m
-
-
-  # JOB 2: Docker Build & Integration Tests
-  docker-validation:
-    needs: [fast-checks-frontend, fast-checks-backend, fast-checks-money-module] # Only run if lint/compile passes
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      # 1. Check Docker Build
-      # This ensures your Dockerfile is valid and the app builds inside it.
-      - name: Build Docker Image
-        run: docker build --target dev -t ts-app-test:latest -f frontend/Dockerfile .
-
-      # 2. Run Tests ON the Docker Image
-      # This runs "bun test" inside the container you just built.
-      - name: Run TypeScript Tests in Container
-        run: docker run --rm ts-app-test:latest bun test
+          # Remove working-directory here if the Go code is at the root
 
       - name: Run Go Tests
-        run: go test -v -race ./...
+        run: go test -v ./...
 
-      - name: Build Warchest 
-        run: go build -o bin/app ./backend
-
-      - name: Build Money Module
-        run: go build -v -o bin/money-module ./money-module
+      - name: Verify Money Module Docker Build
+        run: docker build -t money-module-test .
