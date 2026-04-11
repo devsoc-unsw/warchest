@@ -4,7 +4,7 @@ FROM golang:1.22-alpine AS base
 WORKDIR /money-module
 
 FROM base AS deps
-COPY money-module/go.mod money-module/go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 
