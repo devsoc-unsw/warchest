@@ -35,6 +35,30 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
+        working-directory: ./backend
+    steps: 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Install Go Dependencies
+        run: go mod download
+
+      - name: Check Go Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          args: --timeout=5m
+
+  fast-checks-money-module:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
         working-directory: ./
     steps: 
       - name: Checkout code
@@ -55,9 +79,10 @@ jobs:
           version: latest
           args: --timeout=5m
 
+
   # JOB 2: Docker Build & Integration Tests
   docker-validation:
-    needs: [fast-checks-frontend, fast-checks-backend] # Only run if lint/compile passes
+    needs: [fast-checks-frontend, fast-checks-backend, fast-checks-money-module] # Only run if lint/compile passes
     runs-on: ubuntu-latest
 
     steps:
@@ -67,7 +92,7 @@ jobs:
       # 1. Check Docker Build
       # This ensures your Dockerfile is valid and the app builds inside it.
       - name: Build Docker Image
-        run: docker build --target dev -t ts-app-test:latest -f app/Dockerfile .
+        run: docker build --target dev -t ts-app-test:latest -f frontend/Dockerfile .
 
       # 2. Run Tests ON the Docker Image
       # This runs "bun test" inside the container you just built.
@@ -78,7 +103,7 @@ jobs:
         run: go test -v -race ./...
 
       - name: Build Warchest 
-        run: go build -o bin/app ./cmd/app
+        run: go build -o bin/app ./backend
 
       - name: Build Money Module
-        run: go build -v -o bin/money-module ./cmd/money-module
+        run: go build -v -o bin/money-module ./money-module
