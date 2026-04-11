@@ -4,19 +4,8 @@ run:
   timeout: 5m
 
 output:
-  print-linter-name: true
-  print-issued-lines: true
   formats:
-    colored-line-number:
-      path: stdout
-
-issues:
-  exclude-dirs:
-    - vendor
-    - testdata
-    - third_party$
-    - builtin$
-    - examples$
+    text: {}
 
 formatters:
   enable:
@@ -24,7 +13,6 @@ formatters:
     - goimports
 
 linters:
-  disable-all: true
   enable:
     - bodyclose
     - errcheck
@@ -35,15 +23,22 @@ linters:
     - misspell
     - staticcheck
     - unused
+  settings:
+    funlen:
+      lines: 88
+    govet:
+      enable:
+        - shadow
+    lll:
+      line-length: 88
+      tab-width: 4
+    misspell:
+      locale: UK
+  exclusions:
+    paths:
+      - vendor
+      - testdata
+      - third_party
+      - builtin
+      - examples
 
-linters-settings:
-  funlen:
-    lines: 88
-  govet:
-    enable:
-      - shadow
-  lll:
-    line-length: 88
-    tab-width: 4
-  misspell:
-    locale: UK
