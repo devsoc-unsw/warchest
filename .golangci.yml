@@ -1,50 +1,41 @@
-version: "2"
 output:
+  print-linter-name: true
+  print-issued-lines: true
   formats:
-    text:
+    - format: text
       path: stdout
-      print-linter-name: true
-      print-issued-lines: true
+
+run:
+  skip-dirs:
+    - vendor
+    - testdata
+    - third_party$
+    - builtin$
+    - examples$
+
 linters:
-  default: none
+  disable-all: true
   enable:
     - bodyclose
     - errcheck
     - funlen
+    - gofmt
+    - goimports
     - govet
     - ineffassign
     - lll
     - misspell
     - staticcheck
     - unused
-  settings:
-    funlen:
-      lines: 88
-    govet:
-      enable:
-        - shadow
-    lll:
-      line-length: 88
-      tab-width: 4
-    misspell:
-      locale: UK
-  exclusions:
-    generated: lax
-    paths:
-      - vendor
-      - testdata
-      - third_party$
-      - builtin$
-      - examples$
-formatters:
-  enable:
-    - gofmt
-    - goimports
-  exclusions:
-    generated: lax
-    paths:
-      - vendor
-      - testdata
-      - third_party$
-      - builtin$
-      - examples$
+
+linters-settings:
+  funlen:
+    lines: 88
+  govet:
+    enable:
+      - shadow
+  lll:
+    line-length: 88
+    tab-width: 4
+  misspell:
+    locale: UK
