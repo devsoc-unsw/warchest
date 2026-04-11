@@ -1,8 +1,13 @@
+version: "2"
+
+run:
+  timeout: 5m
+
 output:
   print-linter-name: true
   print-issued-lines: true
   formats:
-    - format: colored-line-number 
+    colored-line-number:
       path: stdout
 
 issues:
@@ -13,14 +18,17 @@ issues:
     - builtin$
     - examples$
 
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
 linters:
   disable-all: true
   enable:
     - bodyclose
     - errcheck
     - funlen
-    - gofmt
-    - goimports
     - govet
     - ineffassign
     - lll
