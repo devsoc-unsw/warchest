@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./ # Assuming this module is at the root level based on your path
+        working-directory: ./money-module
     steps: 
       - name: Checkout code
         uses: actions/checkout@v4

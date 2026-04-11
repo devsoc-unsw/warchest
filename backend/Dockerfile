@@ -7,7 +7,7 @@ COPY go.mod go.sum* ./
 RUN go mod download
 
 FROM base AS dev
-COPY backend/ .
+COPY . .
 EXPOSE 6969
 
 CMD ["/server"]

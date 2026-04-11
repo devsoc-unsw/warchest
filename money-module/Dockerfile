@@ -1,5 +1,4 @@
 # syntax=docker/dockerfile:1
-# language which we use
 FROM golang:1.22-alpine AS base
 WORKDIR /money-module
 
@@ -9,7 +8,7 @@ RUN go mod download
 
 
 FROM base AS dev
-COPY money-module/ .
+COPY . .
 EXPOSE 6767
 
 
