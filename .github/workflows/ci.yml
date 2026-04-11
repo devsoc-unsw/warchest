@@ -61,7 +61,7 @@ jobs:
         run: go mod download
 
       - name: Check Go Lint
-        uses: golangci/golangci-lint-action@v6 # Updated to valid version
+        uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           args: --timeout=5m
@@ -69,6 +69,7 @@ jobs:
 
       - name: Run Go Tests
         run: go test -v ./...
+        working-directory: ./backend
 
       - name: Verify Backend Docker Build
         run: docker build -t backend-test .
@@ -95,14 +96,14 @@ jobs:
         run: go mod download
 
       - name: Check Go Lint
-        uses: golangci/golangci-lint-action@v6 # Updated to valid version
+        uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           args: --timeout=5m
-          # Remove working-directory here if the Go code is at the root
+          working-directory: money-module 
 
       - name: Run Go Tests
         run: go test -v ./...
-
+        working-directory: ./money-module
       - name: Verify Money Module Docker Build
         run: docker build -t money-module-test .
