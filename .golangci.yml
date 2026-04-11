@@ -2,11 +2,11 @@ output:
   print-linter-name: true
   print-issued-lines: true
   formats:
-    - format: text
+    - format: colored-line-number 
       path: stdout
 
-run:
-  skip-dirs:
+issues:
+  exclude-dirs:
     - vendor
     - testdata
     - third_party$

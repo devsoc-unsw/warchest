@@ -43,7 +43,6 @@ jobs:
   # JOB 2: Backend (Waits for Frontend)
   # ==========================================
   fast-checks-backend:
-    needs: fast-checks-frontend # <--- This forces GitHub Actions to wait for the frontend job
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -78,7 +77,6 @@ jobs:
   # JOB 3: Money Module (Waits for Frontend)
   # ==========================================
   fast-checks-money-module:
-    needs: fast-checks-frontend # <--- This also waits for the frontend job
     runs-on: ubuntu-latest
     defaults:
       run:
