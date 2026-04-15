@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.22-alpine AS base
+FROM golang:1.24-alpine AS base
 WORKDIR /money-module
 RUN apk add --no-cache git 
 
