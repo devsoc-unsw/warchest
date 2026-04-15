@@ -1,4 +1,4 @@
-name: TypeScript CI Pipeline
+name: Full Stack CI Pipeline # Updated the name since this handles Go now too!
 
 on:
   push:
@@ -7,12 +7,14 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # JOB 1: Local Build
-  fast-checks:
+  # ==========================================
+  # JOB 1: Frontend (Runs First)
+  # ==========================================
+  fast-checks-frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./app
+        working-directory: ./frontend
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -20,32 +22,88 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest # You can pin a specific version here, e.g., '1.1.0'
+          bun-version: latest
 
-      - name: Install Dependencies
+      - name: Install TypeScript Dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check Lint
+      - name: Check TypeScript Lint
         run: bun run lint
 
-      - name: Check Compile
+      - name: Check TypeScript Compile
         run: bun run build
 
-  # JOB 2: Docker Build & Integration Tests
-  docker-validation:
-    needs: fast-checks # Only run if lint/compile passes
-    runs-on: ubuntu-latest
+      - name: Run TypeScript Tests
+        run: bun run test
 
-    steps:
-      - name: Checkout Code
+      - name: Verify Frontend Docker Build
+        run: docker build -t frontend-test .
+
+  # ==========================================
+  # JOB 2: Backend (Waits for Frontend)
+  # ==========================================
+  fast-checks-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps: 
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Check Docker Build
-      # This ensures your Dockerfile is valid and the app builds inside it.
-      - name: Build Docker Image
-        run: docker build --target dev -t ts-app-test:latest -f app/Dockerfile .
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
 
-      # 2. Run Tests ON the Docker Image
-      # This runs "bun test" inside the container you just built.
-      - name: Run Tests in Container
-        run: docker run --rm ts-app-test:latest bun test
+      - name: Install Go Dependencies
+        run: go mod download
+
+      - name: Check Go Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: --timeout=5m
+          working-directory: backend
+
+      - name: Run Go Tests
+        run: go test -v ./...
+        working-directory: ./backend
+
+      - name: Verify Backend Docker Build
+        run: docker build -t backend-test .
+
+  # ==========================================
+  # JOB 3: Money Module (Waits for Frontend)
+  # ==========================================
+  fast-checks-money-module:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./money-module
+    steps: 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Install Go Dependencies
+        run: go mod download
+
+      - name: Check Go Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: --timeout=5m
+          working-directory: money-module 
+
+      - name: Run Go Tests
+        run: go test -v ./...
+        working-directory: ./money-module
+      - name: Verify Money Module Docker Build
+        run: docker build -t money-module-test .

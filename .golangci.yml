@@ -1,0 +1,44 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+output:
+  formats:
+    text: {}
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+linters:
+  enable:
+    - bodyclose
+    - errcheck
+    - funlen
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - staticcheck
+    - unused
+  settings:
+    funlen:
+      lines: 88
+    govet:
+      enable:
+        - shadow
+    lll:
+      line-length: 88
+      tab-width: 4
+    misspell:
+      locale: UK
+  exclusions:
+    paths:
+      - vendor
+      - testdata
+      - third_party
+      - builtin
+      - examples
+

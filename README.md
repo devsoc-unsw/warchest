@@ -13,6 +13,11 @@ If this doesn't work install the docker-compose plugin
 docker exec -it warchest-dev-container bash
 ```
 
+3. Go linting
+```bash
+golangci-lint run
+```
+
 ### Closing down development
 1. To exit the dev environment
 ```bash
@@ -25,3 +30,5 @@ docker compose down
 ```
 use `bun run lint` for lint and `bun run test` in the dev shell for tests.
 tests need to end in the suffix .test.ts.
+
+
