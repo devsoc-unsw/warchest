@@ -1,21 +1,21 @@
 # syntax=docker/dockerfile:1
+FROM golang:1.26-alpine AS dingo-builder
+RUN go install github.com/MadAppGang/dingo/cmd/dingo@latest
+
 FROM golang:1.24-alpine AS base
 WORKDIR /backend
-RUN apk add --no-cache git 
+RUN apk add --no-cache git
 
 FROM base AS deps
 COPY go.mod go.sum* ./
-RUN go mod download
-RUN git clone https://github.com/MadAppGang/dingo.git /tmp/dingo && \
-    cd /tmp/dingo && \
-    go build -o /usr/local/bin/dingo ./cmd/dingo
+COPY --from=dingo-builder /go/bin/dingo /usr/local/bin/dingo
 
 FROM base AS dev
 COPY . .
 EXPOSE 6969
 CMD ["dingo", "run", "main.go"]
 
-FROM deps as builder
+FROM deps AS builder
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux dingo build -o /server .
 
