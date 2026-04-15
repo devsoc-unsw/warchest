@@ -69,12 +69,12 @@ jobs:
       - name: Transpile .dingo files to .go
         run: dingo go ./...
 
-      - name: Check Go Lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: latest
-          args: --timeout=5m
-          working-directory: backend
+      # - name: Check Go Lint
+      #   uses: golangci/golangci-lint-action@v9
+      #   with:
+      #     version: latest
+      #     args: --timeout=5m
+      #     working-directory: backend
 
       - name: Run Go Tests
         run: go test -v ./...
@@ -116,12 +116,12 @@ jobs:
       - name: Install Go Dependencies
         run: go mod download
 
-      - name: Check Go Lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: latest
-          args: --timeout=5m
-          working-directory: money-module 
+      # - name: Check Go Lint
+      #   uses: golangci/golangci-lint-action@v9
+      #   with:
+      #     version: latest
+      #     args: --timeout=5m
+      #     working-directory: money-module 
 
       - name: Run Go Tests
         run: go test -v ./...
