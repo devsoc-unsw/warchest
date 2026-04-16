@@ -34,6 +34,9 @@ RUN git clone https://github.com/MadAppGang/dingo.git /tmp/dingo \
     && go build -o /usr/local/bin/dingo ./cmd/dingo \
     && rm -rf /tmp/dingo
 
+# install dingo-lsp
+RUN go install github.com/MadAppGang/dingo/cmd/dingo-lsp@latest
+
 # make warchest folder
 RUN mkdir /root/warchest
 WORKDIR /root/warchest
