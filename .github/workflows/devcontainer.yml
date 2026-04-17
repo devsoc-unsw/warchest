@@ -15,7 +15,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: warchest/devcontainer
+  IMAGE_NAME: warchest-devcontainer
 
 jobs:
   build-and-push:
