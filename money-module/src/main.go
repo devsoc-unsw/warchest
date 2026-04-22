@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	. "github.com/tigerbeetle/tigerbeetle-go"
+	tb "github.com/tigerbeetle/tigerbeetle-go"
 )
 
 func main() {
@@ -14,7 +14,7 @@ func main() {
 		tbAddress = "3000"
 	}
 
-	client, err := NewClient(ToUint128(0), []string{tbAddress})
+	client, err := tb.NewClient(tb.ToUint128(0), []string{tbAddress})
 	
 	if err != nil {
 		log.Printf("Error creating client: %s", err)
