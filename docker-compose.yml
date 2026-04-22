@@ -1,9 +1,7 @@
 services:
   warchest-dev-container:
     container_name: warchest-dev-container
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/devsoc-unsw/warchest-devcontainer
     stdin_open: true
     tty: true
     ports:
@@ -21,31 +19,6 @@ services:
     depends_on:
       postgres-be:
         condition: service_healthy
-      postgres-mm:
-        condition: service_healthy
-      tigerbeetle:
-        condition: service_started
-
-  money_module:
-    build:
-      context: .
-      dockerfile: ./money-module/Dockerfile
-      target: dev
-    ports:
-      - "6767:6767"
-    volumes:
-      - ./money-module:/money-module
-      - /money-module/node_modules
-    security_opt:
-      # TigerBeetle client uses io_uring on Linux; default Docker seccomp can block it.
-      - seccomp:unconfined
-    networks:
-      - warchest-network
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgres://postgres:password@postgres-mm:5432/money_module
-      - TIGERBEETLE_ADDRESS=tigerbeetle:3000
-    depends_on:
       postgres-mm:
         condition: service_healthy
       tigerbeetle:
