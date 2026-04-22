@@ -1,6 +1,6 @@
 FROM alpine:3.19
 
-RUN apk add --no-cache curl unzip
+RUN apk add --no-cache curl unzip linux-headers musl-dev
 
 RUN curl -sSL -o /tmp/tigerbeetle.zip https://linux.tigerbeetle.com \
     && unzip -o /tmp/tigerbeetle.zip -d /tmp \
