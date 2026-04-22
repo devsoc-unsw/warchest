@@ -13,9 +13,19 @@ If this doesn't work install the docker-compose plugin
 docker exec -it warchest-dev-container bash
 ```
 
-3. Go linting
+3. Dingo linting
 ```bash
-golangci-lint run
+dingo lint ./...
+```
+
+4. Dingo transpiling
+```bash
+dingo go ./...
+```
+
+5. Running tests (note files should be transpiled already)
+```bash
+go test -v ./...
 ```
 
 ### Closing down development
