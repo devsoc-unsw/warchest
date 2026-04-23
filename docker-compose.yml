@@ -9,11 +9,13 @@ services:
       - "3000:3000"
     volumes:
       - ./:/root/warchest
+    security_opt:
+      - seccomp:unconfined
     environment:
       - NODE_ENV=development
       - BE_DATABASE_URL=postgres://postgres:password@postgres-be:5432/warchest
       - MM_DATABASE_URL=postgres://postgres:password@postgres-mm:5432/money_module
-      - TIGERBEETLE_ADDRESS=tigerbeetle:3000
+      - TIGERBEETLE_ADDRESS=172.20.0.10:3000
     networks:
       - warchest-network
     depends_on:
@@ -57,13 +59,15 @@ services:
       retries: 5
 
   tigerbeetle:
-    build:
-      context: ./money-module/tigerbeetle
-      dockerfile: Dockerfile
+    image: ghcr.io/tigerbeetle/tigerbeetle
+    entrypoint: ["/bin/sh"]
+    command: "/start.sh"
     networks:
-      - warchest-network
+      warchest-network:
+        ipv4_address: 172.20.0.10
     volumes:
       - tigerbeetle_data:/data
+      - ./money-module/tigerbeetle/start.sh:/start.sh
     security_opt:
       - seccomp:unconfined
 
@@ -75,3 +79,6 @@ volumes:
 networks:
   warchest-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24 # Define the range (e.g., 172.20.0.1 to 172.20.0.254)
