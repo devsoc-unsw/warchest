@@ -25,7 +25,7 @@ services:
         condition: service_started
 
   postgres-be:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
@@ -33,7 +33,7 @@ services:
     networks:
       - warchest-network
     volumes:
-      - postgres_be_data:/var/lib/postgresql/data
+      - postgres_be_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -41,7 +41,7 @@ services:
       retries: 5
 
   postgres-mm:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
@@ -49,7 +49,7 @@ services:
     networks:
       - warchest-network
     volumes:
-      - postgres_mm_data:/var/lib/postgresql/data
+      - postgres_mm_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
