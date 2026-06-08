@@ -8,7 +8,7 @@ services:
       # expose ports (3000 computer <-> 3000 on the container)
       - "3000:3000"
     volumes:
-      - ./:/root/warchest
+      - ../:/root/warchest
     environment:
       - NODE_ENV=development
       - BE_DATABASE_URL=postgres://postgres:password@postgres-be:5432/warchest
@@ -58,7 +58,7 @@ services:
 
   tigerbeetle:
     build:
-      context: ./money-module/tigerbeetle
+      context: ../money-module/tigerbeetle
       dockerfile: Dockerfile
     networks:
       - warchest-network
