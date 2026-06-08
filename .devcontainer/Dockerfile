@@ -18,7 +18,7 @@ ENV PATH="/root/go/bin:${PATH}"
 RUN go install golang.org/x/tools/gopls@latest \
     && go install github.com/go-delve/delve/cmd/dlv@latest \
     && go install golang.org/x/tools/cmd/goimports@latest \
-    && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+    && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/refs/heads/main/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
 # set-up bashrc to have basic colours
 RUN { \
@@ -33,6 +33,13 @@ RUN git clone https://github.com/MadAppGang/dingo.git /tmp/dingo \
     && cd /tmp/dingo \
     && go build -o /usr/local/bin/dingo ./cmd/dingo \
     && rm -rf /tmp/dingo
+
+# install Dingo LSP
+RUN git clone https://github.com/gyoumi/dingo.git /tmp/dingo-lsp \
+    && cd /tmp/dingo-lsp \
+    && git switch feature/quickstart \
+    && go build -o /root/go/bin/dingo-lsp ./cmd/dingo-lsp \
+    && rm -rf /tmp/dingo-lsp
 
 # make warchest folder
 RUN mkdir /root/warchest

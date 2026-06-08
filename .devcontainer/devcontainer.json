@@ -1,0 +1,12 @@
+{
+  "name": "Warchest Dev Container",
+  "dockerComposeFile": "./docker-compose.yml",
+  "service": "warchest-dev-container",
+  "workspaceFolder": "/root/warchest",
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "extensions": ["MadAppGang.dingo"]
+    }
+  }
+}
