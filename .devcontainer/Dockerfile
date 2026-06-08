@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 # install linux bash commands which wil be used
@@ -18,7 +18,7 @@ ENV PATH="/root/go/bin:${PATH}"
 RUN go install golang.org/x/tools/gopls@latest \
     && go install github.com/go-delve/delve/cmd/dlv@latest \
     && go install golang.org/x/tools/cmd/goimports@latest \
-    && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/refs/heads/main/install.sh | sh -s -- -b $(go env GOPATH)/bin
+    && curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
 # set-up bashrc to have basic colours
 RUN { \
