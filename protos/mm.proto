@@ -110,14 +110,14 @@ message UpdateBudgetResponse {
 
 service MoneyModule {
   // Metadata only routes
-  rpc CreateAccount(CreateAccountRequest) returns (WalletDetailsResponse)
-  rpc ReadAccount(GetWalletDetailsRequest) returns (WalletDetailsResponse)
-  rpc UpdateAccount(UpdateAccountRequest) returns (WalletDetailsResponse)
-  rpc ArchiveAccount(ArchiveWalletRequest) returns (WalletDetailsResponse)
-  rpc CreateBudget(CreateBudgetRequest) returns (WalletDetailsResponse)
-  rpc ReadBudget(GetWalletDetailsRequest) returns (WalletDetailsResponse)
-  rpc UpdateBudget(UpdateBudgetRequest) returns (WalletDetailsResponse)
-  rpc ArchiveBudget(ArchiveWalletRequest) returns (WalletDetailsResponse)
+  rpc CreateAccount(CreateAccountRequest) returns (WalletDetailsResponse);
+  rpc ReadAccount(GetWalletDetailsRequest) returns (WalletDetailsResponse);
+  rpc UpdateAccount(UpdateAccountRequest) returns (WalletDetailsResponse);
+  rpc ArchiveAccount(ArchiveWalletRequest) returns (WalletDetailsResponse);
+  rpc CreateBudget(CreateBudgetRequest) returns (WalletDetailsResponse);
+  rpc ReadBudget(GetWalletDetailsRequest) returns (WalletDetailsResponse);
+  rpc UpdateBudget(UpdateBudgetRequest) returns (WalletDetailsResponse);
+  rpc ArchiveBudget(ArchiveWalletRequest) returns (WalletDetailsResponse);
 
   // Money routes
   rpc PayAccountFromBudget (PaymentRequest) returns (PaymentResponse);
@@ -125,7 +125,7 @@ service MoneyModule {
   rpc PayRootFromAccount (RootPaymentRequest) returns (PaymentResponse);
   rpc PayAccountFromRoot (RootPaymentRequest) returns (PaymentResponse);
   rpc SendBetweenBudgets (SendRequest) returns (SendResponse);
-  rpc GetAccountTransfers (TransfersRequest) returns (TransfersResponse)
-  rpc GetBudgetTransfers (TransfersRequest) returns (TransfersResponse)
-  rpc GetSocietyTransfers (google.protobuf.Empty) returns (TransfersResponse)
+  rpc GetAccountTransfers (TransfersRequest) returns (TransfersResponse);
+  rpc GetBudgetTransfers (TransfersRequest) returns (TransfersResponse);
+  rpc GetSocietyTransfers (google.protobuf.Empty) returns (TransfersResponse);
 }
