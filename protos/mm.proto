@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+// Defines the Go package path for the generated code
+option go_package = "./pb";
+package money_module;
+import "google/protobuf/empty.proto";
+
+message UUID {
+  bytes value = 1;
+}
+
+enum Status {
+  FAILED = 0;
+  PENDING = 1;
+  PASSED = 2;
+}
+
+message PaymentRequest {
+  UUID payer_id = 1;
+  UUID payee_id = 2;
+  uint64 amount = 3;
+}
+
+message RootPaymentRequest {
+  UUID non_root_id = 1;
+  uint64 amount = 2;
+}
+
+message PaymentResponse {
+  UUID transaction_id = 1;
+  Status status = 2;
+} 
+
+message SendRequest {
+  UUID payer_id = 1;
+  UUID payee_id = 2;
+  uint64 amount = 3;
+} 
+
+message SendResponsePayment {
+  UUID transaction_id = 1;
+  Status status = 2;
+}
+
+message TransfersRequest {
+  UUID id = 1;
+}
+
+message Transfer {
+  UUID transfer_id = 1;
+  // TODO: Populate remaining fields later
+}
+
+message TransfersResponse {
+  repeated Transfer transfers = 1;
+}
+
+enum OwnerType {
+  USER = 0;
+  ORG = 1;
+}
+
+enum WalletType {
+  ACCOUNT = 0;
+  BUDGET = 1;
+}
+
+message WalletDetailsResponse {
+  UUID id = 1;
+  OwnerType owner_type = 2;
+  UUID owner_id = 3;
+  WalletType wallet_type = 4;
+  string wallet_name = 5;
+  bool is_archived = 6;
+}
+
+message GetWalletDetailsRequest {
+  UUID id = 1;
+}
+
+message ArchiveWalletRequest {
+  UUID id = 1;
+}
+
+message CreateAccountRequest {
+  OwnerType owner_type = 1;
+  UUID owner_id = 2;
+  string budget_name = 3;
+}
+
+message CreateBudgetRequest {
+  OwnerType owner_type = 1;
+  UUID owner_id = 2;
+  string budget_name = 3;
+}
+
+message UpdateAccountRequest {
+  UUID id = 1;
+  OwnerType owner_type = 2;
+  UUID owner_id = 3;
+  string wallet_name = 4;
+}
+
+message UpdateBudgetResponse {
+  UUID id = 1;
+  OwnerType owner_type = 2;
+  UUID owner_id = 3;
+  string wallet_name = 4;
+}
+
+service MoneyModule {
+  // Metadata only routes
+  rpc CreateAccount(CreateAccountRequest) returns (WalletDetailsResponse)
+  rpc ReadAccount(GetWalletDetailsRequest) returns (WalletDetailsResponse)
+  rpc UpdateAccount(UpdateAccountRequest) returns (WalletDetailsResponse)
+  rpc ArchiveAccount(ArchiveWalletRequest) returns (WalletDetailsResponse)
+  rpc CreateBudget(CreateBudgetRequest) returns (WalletDetailsResponse)
+  rpc ReadBudget(GetWalletDetailsRequest) returns (WalletDetailsResponse)
+  rpc UpdateBudget(UpdateBudgetRequest) returns (WalletDetailsResponse)
+  rpc ArchiveBudget(ArchiveWalletRequest) returns (WalletDetailsResponse)
+
+  // Money routes
+  rpc PayAccountFromBudget (PaymentRequest) returns (PaymentResponse);
+  rpc PayBudgetFromAccount (PaymentRequest) returns (PaymentResponse);
+  rpc PayRootFromAccount (RootPaymentRequest) returns (PaymentResponse);
+  rpc PayAccountFromRoot (RootPaymentRequest) returns (PaymentResponse);
+  rpc SendBetweenBudgets (SendRequest) returns (SendResponse);
+  rpc GetAccountTransfers (TransfersRequest) returns (TransfersResponse)
+  rpc GetBudgetTransfers (TransfersRequest) returns (TransfersResponse)
+  rpc GetSocietyTransfers (google.protobuf.Empty) returns (TransfersResponse)
+}
