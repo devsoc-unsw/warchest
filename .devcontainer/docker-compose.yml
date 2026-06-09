@@ -58,7 +58,7 @@ services:
 
   tigerbeetle:
     build:
-      context: ../money-module/tigerbeetle
+      context: ./tigerbeetle
       dockerfile: Dockerfile
     networks:
       - warchest-network
