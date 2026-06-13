@@ -23,6 +23,8 @@ services:
         condition: service_healthy
       tigerbeetle:
         condition: service_started
+    security_opt:
+      - seccomp:unconfined
 
   postgres-be:
     image: postgres:18-alpine
