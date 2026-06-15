@@ -6,7 +6,7 @@
   "shutdownAction": "stopCompose",
   "customizations": {
     "vscode": {
-      "extensions": ["MadAppGang.dingo"]
+      "extensions": ["golang.Go"]
     }
   }
 }
