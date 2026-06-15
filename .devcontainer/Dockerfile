@@ -28,19 +28,6 @@ RUN { \
     echo "export PS1='\\[\\033[1;32m\\][dev-container]\\[\\033[0m\\] \\w \\$ '"; \
 } >> ~/.bashrc
 
-# install Dingo
-RUN git clone https://github.com/MadAppGang/dingo.git /tmp/dingo \
-    && cd /tmp/dingo \
-    && go build -o /usr/local/bin/dingo ./cmd/dingo \
-    && rm -rf /tmp/dingo
-
-# install Dingo LSP
-RUN git clone https://github.com/gyoumi/dingo.git /tmp/dingo-lsp \
-    && cd /tmp/dingo-lsp \
-    && git switch feature/quickstart \
-    && go build -o /root/go/bin/dingo-lsp ./cmd/dingo-lsp \
-    && rm -rf /tmp/dingo-lsp
-
 # make warchest folder
 RUN mkdir /root/warchest
 WORKDIR /root/warchest

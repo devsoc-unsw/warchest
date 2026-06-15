@@ -11,29 +11,29 @@ services:
       - ../:/root/warchest
     environment:
       - NODE_ENV=development
-      - BE_DATABASE_URL=postgres://postgres:password@postgres-be:5432/warchest
-      - MM_DATABASE_URL=postgres://postgres:password@postgres-mm:5432/money_module
+      - BE_DATABASE_URL=postgres://postgres:password@warchest-postgres-be:5432/warchest
+      - MM_DATABASE_URL=postgres://postgres:password@warchest-postgres-mm:5432/money_module
       - TIGERBEETLE_ADDRESS=tigerbeetle:3000
     networks:
-      - warchest-network
+      - devsoc-network
     depends_on:
-      postgres-be:
+      warchest-postgres-be:
         condition: service_healthy
-      postgres-mm:
+      warchest-postgres-mm:
         condition: service_healthy
-      tigerbeetle:
+      warchest-tigerbeetle:
         condition: service_started
     security_opt:
       - seccomp:unconfined
 
-  postgres-be:
+  warchest-postgres-be:
     image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: warchest
     networks:
-      - warchest-network
+      - devsoc-network
     volumes:
       - postgres_be_data:/var/lib/postgresql
     healthcheck:
@@ -42,14 +42,14 @@ services:
       timeout: 5s
       retries: 5
 
-  postgres-mm:
+  warchest-postgres-mm:
     image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: money_module
     networks:
-      - warchest-network
+      - devsoc-network
     volumes:
       - postgres_mm_data:/var/lib/postgresql
     healthcheck:
@@ -58,7 +58,7 @@ services:
       timeout: 5s
       retries: 5
 
-  tigerbeetle:
+  warchest-tigerbeetle:
     build:
       context: ./tigerbeetle
       dockerfile: Dockerfile
@@ -75,5 +75,5 @@ volumes:
   tigerbeetle_data:
 
 networks:
-  warchest-network:
+  devsoc-network:
     driver: bridge
