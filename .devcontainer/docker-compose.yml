@@ -63,7 +63,7 @@ services:
       context: ./tigerbeetle
       dockerfile: Dockerfile
     networks:
-      - warchest-network
+      - devsoc-network
     volumes:
       - tigerbeetle_data:/data
     security_opt:
