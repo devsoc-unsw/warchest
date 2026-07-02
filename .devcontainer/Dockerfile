@@ -18,17 +18,24 @@ ENV PATH="/root/go/bin:${PATH}"
 RUN go install golang.org/x/tools/gopls@latest \
     && go install github.com/go-delve/delve/cmd/dlv@latest \
     && go install golang.org/x/tools/cmd/goimports@latest \
-    && go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest \
-    && go install github.com/pressly/goose/v3/cmd/goose@latest \
+    && go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest \ # needed for db
+    && go install github.com/pressly/goose/v3/cmd/goose@latest \ # needed for db migratoins
+    && go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \ # needed for rpc
+    && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest \ #needed for grpc
     && curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
 # set-up bashrc to have basic colours
 RUN { \
-    echo "alias ls='ls --color=auto'"; \
-    echo "alias ll='ls -la --color=auto'"; \
-    echo "alias grep='grep --color=auto'"; \
-    echo "export PS1='\\[\\033[1;32m\\][dev-container]\\[\\033[0m\\] \\w \\$ '"; \
+    echo '# Function to get the current git branch'; \
+    echo 'parse_git_branch() {'; \
+    echo '  git branch 2> /dev/null | sed -e "/^[^*]/d" -e "s/* \(.*\)/ (\1)/"'; \
+    echo '}'; \
+    echo ''; \
+    echo '# Set custom colored prompt: user@[devcontainer] path (git branch)'; \
+    echo 'export PS1="\[\033[0;32m\]\u\[\033[0m\]@\[\033[1;32m\][devcontainer]\[\033[0m\] \[\033[0;34m\]\w\[\033[0m\]\[\033[0;33m\]\$(parse_git_branch)\[\033[0m\] $ "'; \
 } >> ~/.bashrc
+# marks git as safe so we can see branches in the .bashrc
+RUN git config --global --add safe.directory '*'
 
 # make warchest folder
 RUN mkdir /root/warchest
