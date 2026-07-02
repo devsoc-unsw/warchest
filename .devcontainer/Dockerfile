@@ -33,6 +33,14 @@ RUN { \
     echo ''; \
     echo '# Set custom colored prompt: user@[devcontainer] path (git branch)'; \
     echo 'export PS1="\[\033[0;32m\]\u\[\033[0m\]@\[\033[1;32m\][devcontainer]\[\033[0m\] \[\033[0;34m\]\w\[\033[0m\]\[\033[0;33m\]\$(parse_git_branch)\[\033[0m\] $ "'; \
+    echo '# Enable colors for ls'; \
+    echo 'alias ls="ls --color=auto"'; \
+    echo 'alias ll="ls -alF --color=auto"'; \
+    echo 'alias la="ls -A --color=auto"'; \
+    echo ''; \
+    echo '# Enable colored auto-completion (for when you hit Tab)'; \
+    echo 'bind "set colored-stats on"'; \
+    echo 'bind "set colored-completion-prefix on"'; \
 } >> ~/.bashrc
 # marks git as safe so we can see branches in the .bashrc
 RUN git config --global --add safe.directory '*'
