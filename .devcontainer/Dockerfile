@@ -18,10 +18,13 @@ ENV PATH="/root/go/bin:${PATH}"
 RUN go install golang.org/x/tools/gopls@latest \
     && go install github.com/go-delve/delve/cmd/dlv@latest \
     && go install golang.org/x/tools/cmd/goimports@latest \
-    && go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest \ # needed for db
-    && go install github.com/pressly/goose/v3/cmd/goose@latest \ # needed for db migratoins
-    && go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \ # needed for rpc
-    && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest \ #needed for grpc
+    # needed for db migrations
+    && go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest \
+    && go install github.com/pressly/goose/v3/cmd/goose@latest \
+    # needed for proto generation
+    && go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \
+    # needed for grpc
+    && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest \
     && curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
 # set-up bashrc to have basic colours
