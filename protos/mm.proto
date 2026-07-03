@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 // Defines the Go package path for the generated code
-option go_package = "./pb";
+option go_package = "./money_module_protobuff";
 package money_module;
 import "google/protobuf/empty.proto";
 
@@ -37,7 +37,7 @@ message SendRequest {
   uint64 amount = 3;
 } 
 
-message SendResponsePayment {
+message SendResponse {
   UUID transaction_id = 1;
   Status status = 2;
 }
@@ -48,7 +48,9 @@ message TransfersRequest {
 
 message Transfer {
   UUID transfer_id = 1;
-  // TODO: Populate remaining fields later
+  UUID sender = 2;
+  UUID receiver = 3;
+  string description = 4;
 }
 
 message TransfersResponse {
@@ -101,7 +103,7 @@ message UpdateAccountRequest {
   string wallet_name = 4;
 }
 
-message UpdateBudgetResponse {
+message UpdateBudgetRequest {
   UUID id = 1;
   OwnerType owner_type = 2;
   UUID owner_id = 3;
