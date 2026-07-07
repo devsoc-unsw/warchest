@@ -13,8 +13,8 @@ FROM base AS dev
 # Notice we pull from /frontend/node_modules now
 COPY --from=deps /frontend/node_modules ./node_modules
 # Copy local files into the current WORKDIR (/frontend)
-COPY . . 
-EXPOSE 3000 
+COPY . .
+EXPOSE 3000
 CMD ["bun", "run", "dev", "--host", "0.0.0.0"]
 
 # --- BUILDER STAGE ---
@@ -25,8 +25,8 @@ RUN bun run build
 
 # --- PRODUCTION STAGE ---
 FROM base AS production
-COPY --from=builder /frontend/.output ./.output
+COPY --from=builder /frontend/dist ./dist
 COPY --from=builder /frontend/node_modules ./node_modules
-COPY package.json ./
+COPY package.json vite.config.ts tsconfig.json ./
 EXPOSE 3000
 CMD ["bun", "run", "preview", "--host", "0.0.0.0"]

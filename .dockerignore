@@ -11,11 +11,7 @@
 **/.DS_Store
 
 # Build artifacts
-app/.output
-app/dist
-
-# Lockfiles for db (not needed in image; services resolve db deps via file: link)
-db/bun.lock
+frontend/dist
 
 # Misc
 *.md
