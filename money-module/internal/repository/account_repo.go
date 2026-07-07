@@ -13,13 +13,13 @@ type AccountRepository interface {
 		ctx context.Context,
 		id pgtype.UUID,
 		accountName string,
-		ownerType db.AccountTypes,
+		ownerType db.OwnerType,
 		ownerID pgtype.UUID) error
 	CreateBalance(
 		ctx context.Context,
 		id pgtype.UUID,
 		accountName string,
-		ownerType db.AccountTypes,
+		ownerType db.OwnerType,
 		ownerID pgtype.UUID) error
 	ReadAccount(ctx context.Context, id pgtype.UUID) (db.Account, error)
 	ArchiveAccount(ctx context.Context, id pgtype.UUID) error
@@ -39,13 +39,13 @@ func (r *sqlAccountRepository) CreateAccount(
 	ctx context.Context,
 	id pgtype.UUID,
 	accountName string,
-	ownerType db.AccountTypes,
+	ownerType db.OwnerType,
 	ownerID pgtype.UUID,
 ) error {
 	return r.queries.CreateAccount(ctx, db.CreateAccountParams{
 		ID: id,
-		AccountType: db.NullAccountTypes{
-			AccountTypes: db.AccountTypesREAL, Valid: true},
+		AccountType: db.NullAccountType{
+			AccountType: db.AccountTypeREAL, Valid: true},
 		AccountName: accountName,
 		OwnerType:   ownerType,
 		OwnerID:     ownerID,
@@ -56,13 +56,13 @@ func (r *sqlAccountRepository) CreateBalance(
 	ctx context.Context,
 	id pgtype.UUID,
 	accountName string,
-	ownerType db.AccountTypes,
+	ownerType db.OwnerType,
 	ownerID pgtype.UUID,
 ) error {
 	return r.queries.CreateAccount(ctx, db.CreateAccountParams{
 		ID: id,
-		AccountType: db.NullAccountTypes{
-			AccountTypes: db.AccountTypesVIRTUAL, Valid: true},
+		AccountType: db.NullAccountType{
+			AccountType: db.AccountTypeVIRTUAL, Valid: true},
 		AccountName: accountName,
 		OwnerType:   ownerType,
 		OwnerID:     ownerID,
