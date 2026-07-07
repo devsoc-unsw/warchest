@@ -11,46 +11,90 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type AccountTypes string
+type AccountType string
 
 const (
-	AccountTypesVIRTUAL AccountTypes = "VIRTUAL"
-	AccountTypesREAL    AccountTypes = "REAL"
+	AccountTypeVIRTUAL AccountType = "VIRTUAL"
+	AccountTypeREAL    AccountType = "REAL"
 )
 
-func (e *AccountTypes) Scan(src interface{}) error {
+func (e *AccountType) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = AccountTypes(s)
+		*e = AccountType(s)
 	case string:
-		*e = AccountTypes(s)
+		*e = AccountType(s)
 	default:
-		return fmt.Errorf("unsupported scan type for AccountTypes: %T", src)
+		return fmt.Errorf("unsupported scan type for AccountType: %T", src)
 	}
 	return nil
 }
 
-type NullAccountTypes struct {
-	AccountTypes AccountTypes
-	Valid        bool // Valid is true if AccountTypes is not NULL
+type NullAccountType struct {
+	AccountType AccountType
+	Valid       bool // Valid is true if AccountType is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullAccountTypes) Scan(value interface{}) error {
+func (ns *NullAccountType) Scan(value interface{}) error {
 	if value == nil {
-		ns.AccountTypes, ns.Valid = "", false
+		ns.AccountType, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.AccountTypes.Scan(value)
+	return ns.AccountType.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullAccountTypes) Value() (driver.Value, error) {
+func (ns NullAccountType) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.AccountTypes), nil
+	return string(ns.AccountType), nil
+}
+
+type OwnerType string
+
+const (
+	OwnerTypeORGANISATION OwnerType = "ORGANISATION"
+	OwnerTypeUSER         OwnerType = "USER"
+	OwnerTypePLATFORM     OwnerType = "PLATFORM"
+	OwnerTypeWORLD        OwnerType = "WORLD"
+)
+
+func (e *OwnerType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OwnerType(s)
+	case string:
+		*e = OwnerType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OwnerType: %T", src)
+	}
+	return nil
+}
+
+type NullOwnerType struct {
+	OwnerType OwnerType
+	Valid     bool // Valid is true if OwnerType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOwnerType) Scan(value interface{}) error {
+	if value == nil {
+		ns.OwnerType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OwnerType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOwnerType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OwnerType), nil
 }
 
 type TransferTypes string
@@ -97,9 +141,9 @@ func (ns NullTransferTypes) Value() (driver.Value, error) {
 
 type Account struct {
 	ID          pgtype.UUID
-	AccountType NullAccountTypes
+	AccountType NullAccountType
 	AccountName string
-	OwnerType   AccountTypes
+	OwnerType   OwnerType
 	OwnerID     pgtype.UUID
 	ArchivedAt  pgtype.Timestamptz
 }

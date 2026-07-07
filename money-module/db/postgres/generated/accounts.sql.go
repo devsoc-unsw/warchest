@@ -29,9 +29,9 @@ VALUES (
 
 type CreateAccountParams struct {
 	ID          pgtype.UUID
-	AccountType NullAccountTypes
+	AccountType NullAccountType
 	AccountName string
-	OwnerType   AccountTypes
+	OwnerType   OwnerType
 	OwnerID     pgtype.UUID
 }
 
