@@ -2,26 +2,16 @@
   "name": "warchest",
   "private": true,
   "type": "module",
-  "exports": {
-    "./db": "./db/index.ts",
-    "./db/schema": "./db/schema.ts"
-  },
   "scripts": {
     "dev": "vite dev --port 3000 --host",
     "build": "vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --port 3000",
     "test": "vitest",
     "lint": "eslint",
     "format": "prettier",
-    "check": "prettier --write . && eslint --fix",
-    "db:generate": "drizzle-kit generate --config ./db/drizzle.config.ts",
-    "db:migrate": "drizzle-kit migrate --config ./db/drizzle.config.ts",
-    "db:studio": "drizzle-kit studio --config ./db/drizzle.config.ts",
-    "db:push": "drizzle-kit push --config ./db/drizzle.config.ts"
+    "check": "prettier --write . && eslint --fix"
   },
   "dependencies": {
-    "drizzle-orm": "^0.38.0",
-    "postgres": "^3.4.0",
     "@base-ui/react": "^1.1.0",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@hugeicons/core-free-icons": "^3.1.1",
@@ -30,12 +20,9 @@
     "@tanstack/react-devtools": "^0.7.0",
     "@tanstack/react-router": "^1.132.0",
     "@tanstack/react-router-devtools": "^1.132.0",
-    "@tanstack/react-router-ssr-query": "^1.131.7",
-    "@tanstack/react-start": "^1.132.0",
     "@tanstack/router-plugin": "^1.132.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "nitro": "latest",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "shadcn": "^3.7.0",
@@ -59,7 +46,6 @@
     "vite": "^7.1.7",
     "vite-node": "^5.3.0",
     "vitest": "^3.0.5",
-    "web-vitals": "^5.1.0",
-    "drizzle-kit": "^0.30.0"
+    "web-vitals": "^5.1.0"
   }
 }
