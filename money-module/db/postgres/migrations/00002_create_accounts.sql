@@ -2,15 +2,16 @@
 CREATE TYPE account_type AS ENUM ('VIRTUAL', 'REAL');
 CREATE TYPE owner_type AS ENUM ('ORGANISATION', 'USER', 'PLATFORM', 'WORLD');
 
-CREATE TABLE account (
+CREATE TABLE accounts (
     id UUID PRIMARY KEY,
-    account_type account_type,
+    account_type account_type NOT NULL,
     account_name TEXT NOT NULL,
     owner_type owner_type NOT NULL, 
-    owner_id UUID NOT NULL,
+    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     archived_at TIMESTAMPTZ DEFAULT NULL
 );
 
 -- +goose Down
-DROP TABLE account;
-DROP type account_types;
+DROP TABLE accounts;
+DROP type account_type;
+DROP type owner_type;
