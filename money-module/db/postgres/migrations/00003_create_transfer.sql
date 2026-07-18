@@ -1,5 +1,5 @@
 -- +goose Up
-CREATE TYPE transfer_type AS ENUM ('VIRTUAL', 'REAL');
+CREATE TYPE transfer_type AS ENUM ('virtual', 'real');
 CREATE TABLE transfers (
     id UUID PRIMARY KEY,
     sender UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, 

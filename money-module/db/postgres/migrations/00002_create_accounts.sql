@@ -1,6 +1,6 @@
 -- +goose Up
-CREATE TYPE account_type AS ENUM ('VIRTUAL', 'REAL');
-CREATE TYPE owner_type AS ENUM ('ORGANISATION', 'USER', 'PLATFORM', 'WORLD');
+CREATE TYPE account_type AS ENUM ('virtual', 'real');
+CREATE TYPE owner_type AS ENUM ('organisation', 'user', 'platform', 'world');
 
 CREATE TABLE accounts (
     id UUID PRIMARY KEY,
