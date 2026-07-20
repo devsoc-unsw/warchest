@@ -14,6 +14,8 @@ services:
       - BE_DATABASE_URL=postgres://postgres:password@warchest-postgres-be:5432/warchest
       - MM_DATABASE_URL=postgres://postgres:password@warchest-postgres-mm:5432/money_module
       - TIGERBEETLE_ADDRESS=tigerbeetle:3000
+      - SPICEDB_ADDRESS=warchest-spicedb:50051
+      - SPICEDB_PRESHARED_KEY=warchestdabest
     networks:
       - devsoc-network
     depends_on:
@@ -22,6 +24,8 @@ services:
       warchest-postgres-mm:
         condition: service_healthy
       warchest-tigerbeetle:
+        condition: service_started
+      warchest-spicedb:
         condition: service_started
     security_opt:
       - seccomp:unconfined
@@ -68,6 +72,14 @@ services:
       - tigerbeetle_data:/data
     security_opt:
       - seccomp:unconfined
+
+  warchest-spicedb:
+    image: authzed/spicedb
+    command: serve --grpc-preshared-key "warchestdabest"
+    ports:
+      - "50051:50051"
+    networks:
+      - devsoc-network
 
 volumes:
   postgres_be_data:
