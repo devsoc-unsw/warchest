@@ -38,7 +38,7 @@ func(h *EventHandler) CreateEvent(c *gin.Context) {
 		return
 	}
 	// := declare and assign
-	event, err := h.service.CreateEvent((
+	event, err := h.service.CreateEvent(
 		c.Request.Context(), // read context from http request
 		req.Name,
 		req.EventTime,
@@ -47,11 +47,11 @@ func(h *EventHandler) CreateEvent(c *gin.Context) {
 		req.Description,
 		req.SocietyID,
 		req.CreatedBy,
-	))
+	)
 
 	// check err
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()} // convert error type into a string
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()}) // convert error type into a string
 		return
 	}
 	// return 201, and created data.

@@ -2,13 +2,12 @@
 
 package event
 
-import {
+import (
 	"context"
 	"errors"
 	"time"
 	"backend/db"
-	"github.com/jackc/pgx/v5/pgtype" // UUID, Timestamptz, Numeric, Text - some database specifix types
-}
+	)
 
 // define EventService, what event can do
 // create interface for testing
@@ -46,7 +45,19 @@ func (s *eventServiceImpl) CreateEvent(
 		createdBy int64,
 ) (db.Event, error) {
 	// logic and validation
+	// TODO: auth check
 
-	
+	// event_name cannot be empty
+	if name == "" {
+		return db.Event{}, errors.New("event name is required")
+	}
+	// budget cannot be negative
+	if budget < 0 {
+		return db.Event{}, errors.New("budget could not be negative")
+	}
+	// TODO: convert plain types into pgtype
+
+	// TODO: create the event
+	return db.Event{}, errors.New("TODO: create event not implemented")
 }
 

@@ -5,8 +5,8 @@ CREATE TABLE events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id INT,
     CONSTRAINT fk_user
-        FOREIGN KEY (user_id),
-        REFERENCES users(id)
+        FOREIGN KEY (user_id)
+        REFERENCES users(id),
     event_name VARCHAR(255) NOT NULL,
     event_time TIMESTAMPTZ,
     budget NUMERIC(15, 2),

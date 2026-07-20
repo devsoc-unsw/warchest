@@ -6,12 +6,12 @@ CREATE TABLE notifications (
     sender_id UUID NOT NULL,
     CONSTRAINT fk_sender_user
         FOREIGN KEY (sender_id)
-        REFERENCES users(id),
+        REFERENCES users(id)
 
     recipient_id UUID NOT NULL,
     CONSTRAINT fk_sender_user
         FOREIGN KEY (recipient_id)
-        REFERENCES users(id),
+        REFERENCES users(id)
 
     description TEXT,
     is_read BOOL NOT NULL DEFAULT false,

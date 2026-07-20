@@ -12,9 +12,6 @@ func RegisterRoutes(router *gin.Engine, handler *EventHandler) {
 	{
 		events.POST("", handler.CreateEvent)
 		// add more GET/PUT...
-
-
-
-}
+		}
 	
 }
