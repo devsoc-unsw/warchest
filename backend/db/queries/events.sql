@@ -11,12 +11,13 @@ ORDER BY event_time;
 INSERT INTO events (
     event_name,
     event_time,
-    estimated_budget,
+    budget,
     location,
     description,
+    society_id,
     created_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 
@@ -33,9 +34,9 @@ Update events
 SET
     event_name = $2,
     event_time = $3,
-    estimated_budget = $4,
+    budget = $4,
     location = $5,
-    description = $6
+    description = $6,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
@@ -43,7 +44,7 @@ RETURNING *;
 -- name: ArchiveEvent :one
 UPDATE events
 SET
-    status = 'CLOSED'
+    status = 'CLOSED',
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
