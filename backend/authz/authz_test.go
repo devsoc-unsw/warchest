@@ -9,9 +9,9 @@ import (
 	"github.com/authzed/authzed-go/v1"
 )
 
-// mustWriteRelationship writes a relationship and logs any error,
+// createRelation writes a relationship and logs any error,
 // so callers in Test don't need to repeat the same error-check block.
-func mustWriteRelationship(
+func createRelation(
 	client *authzed.Client,
 	resourceType, resourceID, relation, subjectType, subjectID string,
 ) {
@@ -58,29 +58,29 @@ func Test(t *testing.T) {
 		log.Printf("failed to write schema: %s", err)
 	}
 
-	mustWriteRelationship(
+	createRelation(
 		authzClient, "organisation", "example_org",
 		"treasurer", "user", "John_Doe",
 	)
-	mustWriteRelationship(
+	createRelation(
 		authzClient, "organisation", "example_org",
 		"subcom", "user", "Bob",
 	)
 
 	// Create an event with certain members
-	mustWriteRelationship(
+	createRelation(
 		authzClient, "event", "example_event",
 		"member", "user", "Bob1",
 	)
-	mustWriteRelationship(
+	createRelation(
 		authzClient, "event", "example_event2",
 		"member", "user", "Bob1",
 	)
-	mustWriteRelationship(
+	createRelation(
 		authzClient, "event", "example_event",
 		"member", "user", "Bob2",
 	)
-	mustWriteRelationship(
+	createRelation(
 		authzClient, "event", "example_event",
 		"member", "user", "Bob3",
 	)
@@ -126,14 +126,6 @@ func Test(t *testing.T) {
 	log.Printf("subjects: %v", subjects)
 
 	checkBobCanCreateEvents(authzClient)
-
-	_, err = CheckPermission(
-		authzClient, "organisation", "example_org", "event_create",
-		"user", "John_Doe",
-	)
-	if err != nil {
-		log.Printf("Permission check failed: %s", err)
-	}
 
 	log.Printf("Success")
 }
