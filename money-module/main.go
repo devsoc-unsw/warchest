@@ -8,7 +8,7 @@ import (
 	. "github.com/tigerbeetle/tigerbeetle-go"
 )
 
-func init_tb() Client, error {
+func init_tb() (Client, error) {
 	tbAddress := os.Getenv("TB_ADDRESS")
 	if len(tbAddress) == 0 {
 		tbAddress = "3000"
