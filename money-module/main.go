@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	". github.com/tigerbeetle/tigerbeetle-go"
+	. "github.com/tigerbeetle/tigerbeetle-go"
 )
 
 func init_tb() {
