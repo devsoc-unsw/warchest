@@ -74,13 +74,27 @@ services:
       - seccomp:unconfined
 
   warchest-spicedb:
+    container_name: warchest-spicedb
     image: authzed/spicedb
-    command: serve --grpc-preshared-key "warchestdabest"
+    restart: "no"
+    command: "serve"
     ports:
       - "50051:50051"
+    environment:
+      - "SPICEDB_LOG_FORMAT=json"
+      - "SPICEDB_LOG_LEVEL=info"
+      - "SPICEDB_GRPC_PRESHARED_KEY=warchestdabest"
+      - "SPICEDB_DATASTORE_ENGINE=memory"
+      - "SPICEDB_STREAMING_API_RESPONSE_DELAY_TIMEOUT=0s"
+      - "SPICEDB_ENABLE_PERFORMANCE_INSIGHT_METRICS=true"
     networks:
       - devsoc-network
-
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      interval: "5s"
+      timeout: "30s"
+      retries: 3
+      
 volumes:
   postgres_be_data:
   postgres_mm_data:
