@@ -200,7 +200,7 @@ func LookupSubjects(
 		if err != nil {
 			return nil, err
 		}
-		subjects = append(subjects, resp.SubjectObjectId)
+		subjects = append(subjects, resp.Subject.SubjectObjectId)
 	}
 	return subjects, nil
 }
