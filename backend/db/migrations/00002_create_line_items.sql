@@ -20,9 +20,9 @@ CREATE TABLE line_items (
 	estimated_unit_cost BIGINT NOT NULL,
 	pr_description TEXT,
 	
-	actual_quantity BIGINT NOT NULL,
-    actual_cost_per_item BIGINT NOT NULL,
-	actual_unit_cost BIGINT NOT NULL,
+	actual_quantity BIGINT,
+    actual_cost_per_item BIGINT,
+	actual_unit_cost BIGINT,
 	reimb_description TEXT,
 
 	-- IDs are not explicitly entered by the user

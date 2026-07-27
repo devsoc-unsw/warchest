@@ -5,8 +5,77 @@
 package db
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type LineItemStatus string
+
+const (
+	LineItemStatusPrDraft       LineItemStatus = "pr_draft"
+	LineItemStatusPrPending     LineItemStatus = "pr_pending"
+	LineItemStatusPrApproved    LineItemStatus = "pr_approved"
+	LineItemStatusPrRejected    LineItemStatus = "pr_rejected"
+	LineItemStatusReimbDraft    LineItemStatus = "reimb_draft"
+	LineItemStatusReimbPending  LineItemStatus = "reimb_pending"
+	LineItemStatusReimbApproved LineItemStatus = "reimb_approved"
+	LineItemStatusReimbRejected LineItemStatus = "reimb_rejected"
+)
+
+func (e *LineItemStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LineItemStatus(s)
+	case string:
+		*e = LineItemStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LineItemStatus: %T", src)
+	}
+	return nil
+}
+
+type NullLineItemStatus struct {
+	LineItemStatus LineItemStatus
+	Valid          bool // Valid is true if LineItemStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLineItemStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.LineItemStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LineItemStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLineItemStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LineItemStatus), nil
+}
+
+type LineItem struct {
+	ID                     int64
+	EstimatedQuantity      int64
+	EstimatedCostPerItem   int64
+	EstimatedUnitCost      int64
+	PrDescription          pgtype.Text
+	ActualQuantity         pgtype.Int8
+	ActualCostPerItem      pgtype.Int8
+	ActualUnitCost         pgtype.Int8
+	ReimbDescription       pgtype.Text
+	ReimbursementRequestID pgtype.Int8
+	PurchaseRequestID      int64
+	Status                 NullLineItemStatus
+	IsActive               pgtype.Bool
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+}
 
 type User struct {
 	ID        int64
@@ -15,4 +84,3 @@ type User struct {
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
-
