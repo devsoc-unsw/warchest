@@ -25,7 +25,7 @@ func main() {
 	client, err := init_tb()
 	if err != nil {
 		log.Printf("Error creating client: %s", err)
-		return nil, err
+		return
 	}
 	defer client.Close()
 	fmt.Println("Hello, World!")
