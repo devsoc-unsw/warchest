@@ -27,7 +27,10 @@ func WriteSchemaFromFile(client *authzed.Client, path string) error {
 		return err
 	}
 
-	_, err = client.WriteSchema(context.Background(), &v1.WriteSchemaRequest{Schema: string(schemaBytes)})
+	_, err = client.WriteSchema(
+		context.Background(),
+		&v1.WriteSchemaRequest{Schema: string(schemaBytes)},
+	)
 	if err != nil {
 		log.Println("schema upload failed: ", err)
 		return err
