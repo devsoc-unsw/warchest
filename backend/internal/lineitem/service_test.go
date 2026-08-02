@@ -440,6 +440,263 @@ func TestParamsFromRoundTripsEveryColumn(t *testing.T) {
 	}
 }
 
+func p64(v int64) *int64    { return &v }
+func pstr(s string) *string { return &s }
+
+// seedItem puts one line item in the given status, so a rule can be exercised
+// from every point in the lifecycle.
+func seedItem(repo *fakeRepo, status db.LineItemStatus) db.LineItem {
+	item := db.LineItem{
+		ID: 1, PurchaseRequestID: 7, IsActive: true,
+		EstimatedQuantity: 2, EstimatedCostPerItem: 1000, EstimatedUnitCost: 100,
+		PrDescription: pgtype.Text{String: "cups", Valid: true},
+		Status:        status,
+	}
+	repo.seed(item)
+	return item
+}
+
+func validEstimates() EstimatesInput {
+	return EstimatesInput{
+		EstimatedQuantity:    5,
+		EstimatedCostPerItem: 200,
+		EstimatedUnitCost:    20,
+		Description:          "revised",
+	}
+}
+
+func TestUpdateEstimatesAllowedOnlyInDraft(t *testing.T) {
+	for _, status := range AllStatuses {
+		t.Run(string(status), func(t *testing.T) {
+			repo := newFakeRepo()
+			seedItem(repo, status)
+			svc := NewService(repo)
+
+			_, err := svc.UpdateEstimates(context.Background(), 1, validEstimates())
+			if status == db.LineItemStatusPrDraft {
+				if err != nil {
+					t.Fatalf("UpdateEstimates returned %v, want nil", err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrImmutableField) {
+				t.Fatalf("UpdateEstimates returned %v, want ErrImmutableField", err)
+			}
+		})
+	}
+}
+
+func TestUpdateEstimatesAppliesValuesAndLeavesTheRestAlone(t *testing.T) {
+	repo := newFakeRepo()
+	seedItem(repo, db.LineItemStatusPrDraft)
+	repo.items[1] = withActuals(repo.items[1])
+
+	in := validEstimates()
+	item, err := NewService(repo).UpdateEstimates(context.Background(), 1, in)
+	if err != nil {
+		t.Fatalf("UpdateEstimates returned %v, want nil", err)
+	}
+	if item.EstimatedQuantity != in.EstimatedQuantity {
+		t.Errorf("quantity = %d, want %d",
+			item.EstimatedQuantity, in.EstimatedQuantity)
+	}
+	if item.PrDescription.String != in.Description {
+		t.Errorf("description = %q, want %q",
+			item.PrDescription.String, in.Description)
+	}
+	if item.Status != db.LineItemStatusPrDraft {
+		t.Errorf("status = %q, want it untouched", item.Status)
+	}
+	if item.ActualQuantity.Int64 != 9 || !item.ActualQuantity.Valid {
+		t.Errorf("actual quantity = %+v, want it untouched", item.ActualQuantity)
+	}
+}
+
+func TestUpdateEstimatesValidation(t *testing.T) {
+	repo := newFakeRepo()
+	seedItem(repo, db.LineItemStatusPrDraft)
+	in := validEstimates()
+	in.EstimatedQuantity = 0
+
+	_, err := NewService(repo).UpdateEstimates(context.Background(), 1, in)
+	if !errors.Is(err, ErrValidation) {
+		t.Fatalf("UpdateEstimates returned %v, want ErrValidation", err)
+	}
+	if repo.items[1].EstimatedQuantity != 2 {
+		t.Error("a rejected update still wrote to the row")
+	}
+}
+
+func TestUpdateActualsAllowedOnlyInReimbDraft(t *testing.T) {
+	in := ActualsInput{ActualQuantity: p64(3)}
+
+	for _, status := range AllStatuses {
+		t.Run(string(status), func(t *testing.T) {
+			repo := newFakeRepo()
+			seedItem(repo, status)
+
+			_, err := NewService(repo).UpdateActuals(context.Background(), 1, in)
+			if status == db.LineItemStatusReimbDraft {
+				if err != nil {
+					t.Fatalf("UpdateActuals returned %v, want nil", err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrImmutableField) {
+				t.Fatalf("UpdateActuals returned %v, want ErrImmutableField", err)
+			}
+		})
+	}
+}
+
+// A reimbursement is filled in as receipts arrive, so an update naming one
+// field must not blank the others.
+func TestUpdateActualsAppliesOnlySuppliedFields(t *testing.T) {
+	repo := newFakeRepo()
+	seedItem(repo, db.LineItemStatusReimbDraft)
+	repo.items[1] = withActuals(repo.items[1])
+
+	svc := NewService(repo)
+	in := ActualsInput{ActualCostPerItem: p64(1234)}
+	item, err := svc.UpdateActuals(context.Background(), 1, in)
+	if err != nil {
+		t.Fatalf("UpdateActuals returned %v, want nil", err)
+	}
+	if item.ActualCostPerItem.Int64 != 1234 {
+		t.Errorf("cost per item = %d, want 1234", item.ActualCostPerItem.Int64)
+	}
+	if item.ActualQuantity.Int64 != 9 {
+		t.Errorf("quantity = %d, want 9 untouched", item.ActualQuantity.Int64)
+	}
+	if item.ReimbDescription.String != "receipt" {
+		t.Errorf("description = %q, want it untouched",
+			item.ReimbDescription.String)
+	}
+}
+
+func TestUpdateActualsValidation(t *testing.T) {
+	tests := map[string]ActualsInput{
+		"zero quantity":          {ActualQuantity: p64(0)},
+		"negative quantity":      {ActualQuantity: p64(-1)},
+		"negative cost per item": {ActualCostPerItem: p64(-1)},
+		"negative unit cost":     {ActualUnitCost: p64(-1)},
+		"over long description": {
+			Description: pstr(strings.Repeat("x", maxDescriptionLen+1)),
+		},
+	}
+
+	for name, in := range tests {
+		t.Run(name, func(t *testing.T) {
+			repo := newFakeRepo()
+			seedItem(repo, db.LineItemStatusReimbDraft)
+
+			_, err := NewService(repo).UpdateActuals(context.Background(), 1, in)
+			if !errors.Is(err, ErrValidation) {
+				t.Fatalf("UpdateActuals returned %v, want ErrValidation", err)
+			}
+		})
+	}
+}
+
+func TestAttachReimbursementRequestOnlyFromApproved(t *testing.T) {
+	for _, status := range AllStatuses {
+		t.Run(string(status), func(t *testing.T) {
+			repo := newFakeRepo()
+			seedItem(repo, status)
+			svc := NewService(repo)
+
+			item, err := svc.AttachReimbursementRequest(context.Background(), 1, 42)
+			if status == db.LineItemStatusPrApproved {
+				if err != nil {
+					t.Fatalf("AttachReimbursementRequest returned %v, want nil", err)
+				}
+				if item.Status != db.LineItemStatusReimbDraft {
+					t.Errorf("status = %q, want reimb_draft", item.Status)
+				}
+				if item.ReimbursementRequestID.Int64 != 42 {
+					t.Errorf("reimbursement id = %+v, want 42",
+						item.ReimbursementRequestID)
+				}
+				return
+			}
+			if !errors.Is(err, ErrInvalidTransition) {
+				t.Fatalf("returned %v, want ErrInvalidTransition", err)
+			}
+		})
+	}
+}
+
+func TestAttachReimbursementRequestValidatesID(t *testing.T) {
+	repo := newFakeRepo()
+	seedItem(repo, db.LineItemStatusPrApproved)
+
+	svc := NewService(repo)
+	_, err := svc.AttachReimbursementRequest(context.Background(), 1, 0)
+	if !errors.Is(err, ErrValidation) {
+		t.Fatalf("returned %v, want ErrValidation", err)
+	}
+}
+
+func TestArchiveClearsIsActiveAndKeepsStatus(t *testing.T) {
+	repo := newFakeRepo()
+	seedItem(repo, db.LineItemStatusPrPending)
+
+	if err := NewService(repo).Archive(context.Background(), 1); err != nil {
+		t.Fatalf("Archive returned %v, want nil", err)
+	}
+	if repo.items[1].IsActive {
+		t.Error("IsActive = true, want false")
+	}
+	if repo.items[1].Status != db.LineItemStatusPrPending {
+		t.Errorf("status = %q, want it untouched", repo.items[1].Status)
+	}
+}
+
+func TestArchiveIsIdempotent(t *testing.T) {
+	repo := newFakeRepo()
+	seedItem(repo, db.LineItemStatusPrDraft)
+	svc := NewService(repo)
+	ctx := context.Background()
+
+	if err := svc.Archive(ctx, 1); err != nil {
+		t.Fatalf("first Archive returned %v, want nil", err)
+	}
+	if err := svc.Archive(ctx, 1); err != nil {
+		t.Fatalf("second Archive returned %v, want nil", err)
+	}
+}
+
+func TestMutationsOnMissingItemReturnNotFound(t *testing.T) {
+	svc := NewService(newFakeRepo())
+	ctx := context.Background()
+
+	_, err := svc.UpdateEstimates(ctx, 404, validEstimates())
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("UpdateEstimates returned %v, want ErrNotFound", err)
+	}
+	_, err = svc.UpdateActuals(ctx, 404, ActualsInput{})
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("UpdateActuals returned %v, want ErrNotFound", err)
+	}
+	_, err = svc.AttachReimbursementRequest(ctx, 404, 42)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("AttachReimbursementRequest returned %v, want ErrNotFound", err)
+	}
+	if err = svc.Archive(ctx, 404); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Archive returned %v, want ErrNotFound", err)
+	}
+}
+
+// withActuals fills in the reimbursement half, so tests can prove an update
+// touching one half leaves the other alone.
+func withActuals(item db.LineItem) db.LineItem {
+	item.ActualQuantity = i8(9)
+	item.ActualCostPerItem = i8(900)
+	item.ActualUnitCost = i8(90)
+	item.ReimbDescription = pgtype.Text{String: "receipt", Valid: true}
+	return item
+}
+
 func ids(items []db.LineItem) []int64 {
 	out := make([]int64, len(items))
 	for i, item := range items {

@@ -43,13 +43,19 @@ type EstimatesInput struct {
 }
 
 // ActualsInput records what was really spent, submitted with the
-// reimbursement request. A nil field leaves the stored value untouched, which
-// is how a partially filled reimbursement draft is expressed.
+// reimbursement request.
+//
+// Every field is optional, because a reimbursement draft is filled in as
+// receipts come in rather than in one go. A nil field leaves the stored value
+// untouched; that is deliberately different from EstimatesInput, where the
+// caller is editing a draft it already holds in full and sends every field.
+// Making the description optional too means an update of one number cannot
+// silently wipe the note attached to it.
 type ActualsInput struct {
 	ActualQuantity    *int64
 	ActualCostPerItem *int64
 	ActualUnitCost    *int64
-	Description       string
+	Description       *string
 }
 
 // Totals is the summed cost of the active line items on a purchase request,
@@ -199,30 +205,122 @@ func (s *service) TotalsByPurchaseRequest(
 	return totals, nil
 }
 
-// UpdateEstimates is implemented in phase 4.
+// UpdateEstimates revises what the requester expects to spend.
+//
+// Estimates are editable only while the line item is still a draft. Once it
+// has been submitted, the numbers an approver is looking at, or has already
+// approved, must not move underneath them.
 func (s *service) UpdateEstimates(
-	_ context.Context,
-	_ int64,
-	_ EstimatesInput,
+	ctx context.Context,
+	id int64,
+	in EstimatesInput,
 ) (db.LineItem, error) {
-	return db.LineItem{}, errNotImplemented
+	item, err := s.GetByID(ctx, id)
+	if err != nil {
+		return db.LineItem{}, err
+	}
+	if item.Status != db.LineItemStatusPrDraft {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: estimates are editable only in %q, line item %d is %q",
+			ErrImmutableField, db.LineItemStatusPrDraft, id, item.Status,
+		)
+	}
+	err = validateAmounts(
+		"estimated",
+		in.EstimatedQuantity,
+		in.EstimatedCostPerItem,
+		in.EstimatedUnitCost,
+	)
+	if err != nil {
+		return db.LineItem{}, err
+	}
+	if err = validateDescription(in.Description); err != nil {
+		return db.LineItem{}, err
+	}
+
+	params := paramsFrom(item)
+	params.EstimatedQuantity = in.EstimatedQuantity
+	params.EstimatedCostPerItem = in.EstimatedCostPerItem
+	params.EstimatedUnitCost = in.EstimatedUnitCost
+	params.PrDescription = textFrom(in.Description)
+	return s.repo.UpdateLineItem(ctx, params)
 }
 
-// UpdateActuals is implemented in phase 4.
+// UpdateActuals records what was really spent.
+//
+// Actuals are writable only while the reimbursement is still a draft. Once
+// submitted they are frozen, for the same reason estimates freeze at
+// submission: a treasurer must be deciding on fixed numbers.
 func (s *service) UpdateActuals(
-	_ context.Context,
-	_ int64,
-	_ ActualsInput,
+	ctx context.Context,
+	id int64,
+	in ActualsInput,
 ) (db.LineItem, error) {
-	return db.LineItem{}, errNotImplemented
+	item, err := s.GetByID(ctx, id)
+	if err != nil {
+		return db.LineItem{}, err
+	}
+	if item.Status != db.LineItemStatusReimbDraft {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: actuals are writable only in %q, line item %d is %q",
+			ErrImmutableField, db.LineItemStatusReimbDraft, id, item.Status,
+		)
+	}
+	if err = validateActuals(in); err != nil {
+		return db.LineItem{}, err
+	}
+
+	params := paramsFrom(item)
+	if in.ActualQuantity != nil {
+		params.ActualQuantity = int8From(in.ActualQuantity)
+	}
+	if in.ActualCostPerItem != nil {
+		params.ActualCostPerItem = int8From(in.ActualCostPerItem)
+	}
+	if in.ActualUnitCost != nil {
+		params.ActualUnitCost = int8From(in.ActualUnitCost)
+	}
+	if in.Description != nil {
+		params.ReimbDescription = textFrom(*in.Description)
+	}
+	return s.repo.UpdateLineItem(ctx, params)
 }
 
-// AttachReimbursementRequest is implemented in phase 4.
+// AttachReimbursementRequest moves an approved line item into the
+// reimbursement phase, linking it to the reimbursement request that will carry
+// it.
+//
+// The attachment and the move to reimb_draft are one write: a line item that
+// pointed at a reimbursement request while still sitting in pr_approved, or
+// that reached reimb_draft attached to nothing, would be a state the rest of
+// the package does not expect. Whether the move is legal is asked of the
+// transition table rather than hardcoded here, so the lifecycle has one
+// definition.
 func (s *service) AttachReimbursementRequest(
-	_ context.Context,
-	_, _ int64,
+	ctx context.Context,
+	id, reimbID int64,
 ) (db.LineItem, error) {
-	return db.LineItem{}, errNotImplemented
+	if reimbID <= 0 {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: reimbursement request id must be positive, got %d",
+			ErrValidation, reimbID,
+		)
+	}
+	item, err := s.GetByID(ctx, id)
+	if err != nil {
+		return db.LineItem{}, err
+	}
+	if !CanTransition(item.Status, db.LineItemStatusReimbDraft) {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: line item %d is %q, cannot enter the reimbursement phase",
+			ErrInvalidTransition, id, item.Status,
+		)
+	}
+
+	params := paramsFrom(item)
+	params.ReimbursementRequestID = int8From(&reimbID)
+	params.Status = db.LineItemStatusReimbDraft
+	return s.repo.UpdateLineItem(ctx, params)
 }
 
 // Transition is implemented in phase 5.
@@ -234,9 +332,26 @@ func (s *service) Transition(
 	return db.LineItem{}, errNotImplemented
 }
 
-// Archive is implemented in phase 4.
-func (s *service) Archive(_ context.Context, _ int64) error {
-	return errNotImplemented
+// Archive removes a line item from view by clearing is_active.
+//
+// It is a soft delete: a line item cited by a purchase request must not vanish
+// from underneath it, so the row stays and the reads filter it out. The status
+// is left alone, since archiving is not a step in the lifecycle and an
+// archived item should still say where it had got to. Archiving an already
+// archived item is a no-op rather than an error.
+func (s *service) Archive(ctx context.Context, id int64) error {
+	item, err := s.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !item.IsActive {
+		return nil
+	}
+
+	params := paramsFrom(item)
+	params.IsActive = false
+	_, err = s.repo.UpdateLineItem(ctx, params)
+	return err
 }
 
 // validateAmounts bounds the quantity and money fields of one phase. kind
@@ -263,6 +378,34 @@ func validateAmounts(kind string, quantity, costPerItem, unitCost int64) error {
 			"%w: %s unit cost must not be negative, got %d",
 			ErrValidation, kind, unitCost,
 		)
+	}
+	return nil
+}
+
+// validateActuals bounds whichever actual fields the caller supplied. Absent
+// fields are not defaulted to zero and then rejected: leaving a value unset is
+// how a reimbursement draft is filled in over time.
+func validateActuals(in ActualsInput) error {
+	if in.ActualQuantity != nil && *in.ActualQuantity <= 0 {
+		return fmt.Errorf(
+			"%w: actual quantity must be positive, got %d",
+			ErrValidation, *in.ActualQuantity,
+		)
+	}
+	if in.ActualCostPerItem != nil && *in.ActualCostPerItem < 0 {
+		return fmt.Errorf(
+			"%w: actual cost per item must not be negative, got %d",
+			ErrValidation, *in.ActualCostPerItem,
+		)
+	}
+	if in.ActualUnitCost != nil && *in.ActualUnitCost < 0 {
+		return fmt.Errorf(
+			"%w: actual unit cost must not be negative, got %d",
+			ErrValidation, *in.ActualUnitCost,
+		)
+	}
+	if in.Description != nil {
+		return validateDescription(*in.Description)
 	}
 	return nil
 }
