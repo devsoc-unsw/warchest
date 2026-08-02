@@ -41,3 +41,4 @@ CREATE TABLE line_items (
 
 -- +goose Down
 DROP TABLE line_items;
+DROP TYPE line_item_status;
