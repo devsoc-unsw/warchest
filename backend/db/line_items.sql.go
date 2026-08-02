@@ -100,60 +100,88 @@ func (q *Queries) GetLineItemByID(ctx context.Context, id int64) (LineItem, erro
 	return i, err
 }
 
-const getLineItemByPRID = `-- name: GetLineItemByPRID :one
+const getLineItemsByPRID = `-- name: GetLineItemsByPRID :many
 SELECT id, estimated_quantity, estimated_cost_per_item, estimated_unit_cost, pr_description, actual_quantity, actual_cost_per_item, actual_unit_cost, reimb_description, reimbursement_request_id, purchase_request_id, status, is_active, created_at, updated_at FROM line_items
-WHERE purchase_request_ID = $1 LIMIT 1
+WHERE purchase_request_ID = $1 AND is_active
+ORDER BY id
 `
 
-func (q *Queries) GetLineItemByPRID(ctx context.Context, purchaseRequestID int64) (LineItem, error) {
-	row := q.db.QueryRow(ctx, getLineItemByPRID, purchaseRequestID)
-	var i LineItem
-	err := row.Scan(
-		&i.ID,
-		&i.EstimatedQuantity,
-		&i.EstimatedCostPerItem,
-		&i.EstimatedUnitCost,
-		&i.PrDescription,
-		&i.ActualQuantity,
-		&i.ActualCostPerItem,
-		&i.ActualUnitCost,
-		&i.ReimbDescription,
-		&i.ReimbursementRequestID,
-		&i.PurchaseRequestID,
-		&i.Status,
-		&i.IsActive,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+func (q *Queries) GetLineItemsByPRID(ctx context.Context, purchaseRequestID int64) ([]LineItem, error) {
+	rows, err := q.db.Query(ctx, getLineItemsByPRID, purchaseRequestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LineItem
+	for rows.Next() {
+		var i LineItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.EstimatedQuantity,
+			&i.EstimatedCostPerItem,
+			&i.EstimatedUnitCost,
+			&i.PrDescription,
+			&i.ActualQuantity,
+			&i.ActualCostPerItem,
+			&i.ActualUnitCost,
+			&i.ReimbDescription,
+			&i.ReimbursementRequestID,
+			&i.PurchaseRequestID,
+			&i.Status,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const getLineItemByReimbID = `-- name: GetLineItemByReimbID :one
+const getLineItemsByReimbID = `-- name: GetLineItemsByReimbID :many
 SELECT id, estimated_quantity, estimated_cost_per_item, estimated_unit_cost, pr_description, actual_quantity, actual_cost_per_item, actual_unit_cost, reimb_description, reimbursement_request_id, purchase_request_id, status, is_active, created_at, updated_at FROM line_items
-WHERE reimbursement_request_ID = $1 LIMIT 1
+WHERE reimbursement_request_ID = $1 AND is_active
+ORDER BY ID
 `
 
-func (q *Queries) GetLineItemByReimbID(ctx context.Context, reimbursementRequestID pgtype.Int8) (LineItem, error) {
-	row := q.db.QueryRow(ctx, getLineItemByReimbID, reimbursementRequestID)
-	var i LineItem
-	err := row.Scan(
-		&i.ID,
-		&i.EstimatedQuantity,
-		&i.EstimatedCostPerItem,
-		&i.EstimatedUnitCost,
-		&i.PrDescription,
-		&i.ActualQuantity,
-		&i.ActualCostPerItem,
-		&i.ActualUnitCost,
-		&i.ReimbDescription,
-		&i.ReimbursementRequestID,
-		&i.PurchaseRequestID,
-		&i.Status,
-		&i.IsActive,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+func (q *Queries) GetLineItemsByReimbID(ctx context.Context, reimbursementRequestID pgtype.Int8) ([]LineItem, error) {
+	rows, err := q.db.Query(ctx, getLineItemsByReimbID, reimbursementRequestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LineItem
+	for rows.Next() {
+		var i LineItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.EstimatedQuantity,
+			&i.EstimatedCostPerItem,
+			&i.EstimatedUnitCost,
+			&i.PrDescription,
+			&i.ActualQuantity,
+			&i.ActualCostPerItem,
+			&i.ActualUnitCost,
+			&i.ReimbDescription,
+			&i.ReimbursementRequestID,
+			&i.PurchaseRequestID,
+			&i.Status,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listLineItems = `-- name: ListLineItems :many
@@ -232,8 +260,8 @@ type UpdateLineItemParams struct {
 	ActualUnitCost         pgtype.Int8
 	ReimbDescription       pgtype.Text
 	ReimbursementRequestID pgtype.Int8
-	Status                 NullLineItemStatus
-	IsActive               pgtype.Bool
+	Status                 LineItemStatus
+	IsActive               bool
 }
 
 func (q *Queries) UpdateLineItem(ctx context.Context, arg UpdateLineItemParams) (LineItem, error) {

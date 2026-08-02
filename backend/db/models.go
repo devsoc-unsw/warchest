@@ -71,8 +71,8 @@ type LineItem struct {
 	ReimbDescription       pgtype.Text
 	ReimbursementRequestID pgtype.Int8
 	PurchaseRequestID      int64
-	Status                 NullLineItemStatus
-	IsActive               pgtype.Bool
+	Status                 LineItemStatus
+	IsActive               bool
 	CreatedAt              pgtype.Timestamptz
 	UpdatedAt              pgtype.Timestamptz
 }
