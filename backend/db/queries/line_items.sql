@@ -2,13 +2,15 @@
 SELECT * FROM line_items
 WHERE id = $1 LIMIT 1;
 
--- name: GetLineItemByPRID :one
+-- name: GetLineItemsByPRID :many
 SELECT * FROM line_items
-WHERE purchase_request_ID = $1 LIMIT 1;
+WHERE purchase_request_ID = $1 AND is_active
+ORDER BY id;
 
--- name: GetLineItemByReimbID :one
+-- name: GetLineItemsByReimbID :many
 SELECT * FROM line_items
-WHERE reimbursement_request_ID = $1 LIMIT 1;
+WHERE reimbursement_request_ID = $1 AND is_active
+ORDER BY ID;
 
 -- name: ListLineItems :many
 SELECT * FROM line_items
