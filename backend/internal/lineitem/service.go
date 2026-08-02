@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"backend/db"
 
@@ -15,11 +16,6 @@ import (
 // TEXT, so this is the service's own limit, there to stop a single request
 // carrying an unreasonable payload.
 const maxDescriptionLen = 1000
-
-// errNotImplemented is returned by the mutating methods until phases 4 and 5
-// fill them in. It is unexported so it never becomes part of the error
-// taxonomy that callers switch on.
-var errNotImplemented = errors.New("not implemented")
 
 // CreateInput is the data needed to open a new line item.
 //
@@ -323,13 +319,67 @@ func (s *service) AttachReimbursementRequest(
 	return s.repo.UpdateLineItem(ctx, params)
 }
 
-// Transition is implemented in phase 5.
+// Transition moves a line item along the lifecycle.
+//
+// Only edges in the transition table are permitted, so a line item cannot skip
+// approval, return from a terminal state, or jump between the two phases.
+//
+// TODO: this reads the current status and then writes, with nothing holding
+// the row in between. Two callers can both observe pr_draft and both write.
+// Closing that needs a status guarded UPDATE (... WHERE id = $1 AND status =
+// $2), which is a change to queries/line_items.sql and a regenerate.
 func (s *service) Transition(
-	_ context.Context,
-	_ int64,
-	_ db.LineItemStatus,
+	ctx context.Context,
+	id int64,
+	to db.LineItemStatus,
 ) (db.LineItem, error) {
-	return db.LineItem{}, errNotImplemented
+	item, err := s.GetByID(ctx, id)
+	if err != nil {
+		return db.LineItem{}, err
+	}
+	if !item.IsActive {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: line item %d is archived", ErrInvalidTransition, id,
+		)
+	}
+	if !CanTransition(item.Status, to) {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: line item %d cannot move from %q to %q",
+			ErrInvalidTransition, id, item.Status, to,
+		)
+	}
+	if to == db.LineItemStatusReimbPending {
+		if err = requireActuals(item); err != nil {
+			return db.LineItem{}, err
+		}
+	}
+
+	params := paramsFrom(item)
+	params.Status = to
+	return s.repo.UpdateLineItem(ctx, params)
+}
+
+// requireActuals refuses to submit a reimbursement that has not been filled
+// in. Without it an empty claim reaches a treasurer looking like a real one,
+// since the actual columns are nullable and default to nothing.
+func requireActuals(item db.LineItem) error {
+	var missing []string
+	if !item.ActualQuantity.Valid {
+		missing = append(missing, "quantity")
+	}
+	if !item.ActualCostPerItem.Valid {
+		missing = append(missing, "cost per item")
+	}
+	if !item.ActualUnitCost.Valid {
+		missing = append(missing, "unit cost")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf(
+			"%w: cannot submit for reimbursement, missing actual %s",
+			ErrValidation, strings.Join(missing, ", "),
+		)
+	}
+	return nil
 }
 
 // Archive removes a line item from view by clearing is_active.

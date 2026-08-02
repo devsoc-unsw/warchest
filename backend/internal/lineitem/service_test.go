@@ -687,6 +687,128 @@ func TestMutationsOnMissingItemReturnNotFound(t *testing.T) {
 	}
 }
 
+// TestTransitionAllowsExactlyTheLegalEdges walks every ordered pair of
+// statuses through the service, so the rule the HTTP layer will rely on is
+// checked end to end and not only in the transition table.
+func TestTransitionAllowsExactlyTheLegalEdges(t *testing.T) {
+	for _, from := range AllStatuses {
+		for _, to := range AllStatuses {
+			t.Run(string(from)+"_to_"+string(to), func(t *testing.T) {
+				repo := newFakeRepo()
+				// Actuals present throughout, so this test measures the
+				// transition rules and not the reimbursement guard.
+				repo.seed(withActuals(seedItem(repo, from)))
+
+				_, err := NewService(repo).Transition(context.Background(), 1, to)
+				if !CanTransition(from, to) {
+					if !errors.Is(err, ErrInvalidTransition) {
+						t.Fatalf("returned %v, want ErrInvalidTransition", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("Transition returned %v, want nil", err)
+				}
+				if repo.items[1].Status != to {
+					t.Errorf("status = %q, want %q", repo.items[1].Status, to)
+				}
+			})
+		}
+	}
+}
+
+// An empty claim must not reach a treasurer looking like a real one.
+func TestTransitionToReimbPendingRequiresActuals(t *testing.T) {
+	partial := map[string]func(db.LineItem) db.LineItem{
+		"nothing recorded": func(item db.LineItem) db.LineItem { return item },
+		"quantity only": func(item db.LineItem) db.LineItem {
+			item.ActualQuantity = i8(3)
+			return item
+		},
+		"missing unit cost": func(item db.LineItem) db.LineItem {
+			item.ActualQuantity = i8(3)
+			item.ActualCostPerItem = i8(900)
+			return item
+		},
+	}
+
+	for name, fill := range partial {
+		t.Run(name, func(t *testing.T) {
+			repo := newFakeRepo()
+			repo.seed(fill(seedItem(repo, db.LineItemStatusReimbDraft)))
+
+			svc := NewService(repo)
+			_, err := svc.Transition(
+				context.Background(), 1, db.LineItemStatusReimbPending,
+			)
+			if !errors.Is(err, ErrValidation) {
+				t.Fatalf("Transition returned %v, want ErrValidation", err)
+			}
+			if repo.items[1].Status != db.LineItemStatusReimbDraft {
+				t.Error("a rejected transition still moved the status")
+			}
+		})
+	}
+}
+
+func TestTransitionToReimbPendingWithCompleteActuals(t *testing.T) {
+	repo := newFakeRepo()
+	repo.seed(withActuals(seedItem(repo, db.LineItemStatusReimbDraft)))
+
+	svc := NewService(repo)
+	item, err := svc.Transition(
+		context.Background(), 1, db.LineItemStatusReimbPending,
+	)
+	if err != nil {
+		t.Fatalf("Transition returned %v, want nil", err)
+	}
+	if item.Status != db.LineItemStatusReimbPending {
+		t.Errorf("status = %q, want reimb_pending", item.Status)
+	}
+}
+
+// Archiving is a soft delete, so an archived item must not keep moving through
+// the lifecycle and end up approved.
+func TestTransitionRejectsArchivedItem(t *testing.T) {
+	repo := newFakeRepo()
+	item := seedItem(repo, db.LineItemStatusPrDraft)
+	item.IsActive = false
+	repo.seed(item)
+
+	svc := NewService(repo)
+	_, err := svc.Transition(context.Background(), 1, db.LineItemStatusPrPending)
+	if !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("Transition returned %v, want ErrInvalidTransition", err)
+	}
+}
+
+func TestTransitionLeavesOtherFieldsAlone(t *testing.T) {
+	repo := newFakeRepo()
+	before := withActuals(seedItem(repo, db.LineItemStatusPrDraft))
+	repo.seed(before)
+
+	svc := NewService(repo)
+	after, err := svc.Transition(context.Background(), 1, db.LineItemStatusPrPending)
+	if err != nil {
+		t.Fatalf("Transition returned %v, want nil", err)
+	}
+
+	before.Status = db.LineItemStatusPrPending
+	if after != before {
+		t.Errorf("transition changed more than status:\n got %+v\nwant %+v",
+			after, before)
+	}
+}
+
+func TestTransitionOnMissingItemReturnsNotFound(t *testing.T) {
+	svc := NewService(newFakeRepo())
+
+	_, err := svc.Transition(context.Background(), 404, db.LineItemStatusPrPending)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Transition returned %v, want ErrNotFound", err)
+	}
+}
+
 // withActuals fills in the reimbursement half, so tests can prove an update
 // touching one half leaves the other alone.
 func withActuals(item db.LineItem) db.LineItem {
