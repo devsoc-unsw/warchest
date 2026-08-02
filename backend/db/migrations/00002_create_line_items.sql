@@ -26,8 +26,10 @@ CREATE TABLE line_items (
 	reimb_description TEXT,
 
 	-- IDs are not explicitly entered by the user
-	reimbursement_request_ID BIGSERIAL, -- should this be BIGSERIAL?
-	purchase_request_ID BIGSERIAL NOT NULL, -- should this be BIGSERIAL?
+	reimbursement_request_ID BIGINT, -- these are existing ids 
+	purchase_request_ID BIGINT NOT NULL, -- these are existing ids
+    -- these should be foreign keys but since idk what the other tables/names are called i haven't
+    -- referenced them
 
 	status line_item_status,
     is_active BOOLEAN,
