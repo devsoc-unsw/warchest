@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"backend/db"
-	"backend/internal/lineitem"
+	"backend/internal/app"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,8 +36,9 @@ func run() error {
 	router := gin.Default()
 	router.GET("/health", health(pool))
 
-	// Each module wires its own layers and mounts its own routes.
-	lineitem.Wire(db.New(pool), router)
+	// app is the only place that assembles the layers; main just supplies
+	// the dependencies they need.
+	app.Wire(db.New(pool), router)
 
 	return serve(router)
 }

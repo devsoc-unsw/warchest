@@ -2,6 +2,12 @@
 // items: the status lifecycle, the field mutability rules that fall out of it,
 // and input validation.
 //
+// It is the middle of three layers. It declares the Repository it needs and
+// depends on nothing above itself, so the rules here can be exercised without
+// a database or an HTTP server. backend/internal/repository/lineitem supplies
+// the Postgres implementation and backend/internal/handler/lineitem exposes
+// these methods over HTTP.
+//
 // All money values handled by this package are minor units (cents). Nothing
 // here converts between minor and major units; callers pass and receive cents.
 //

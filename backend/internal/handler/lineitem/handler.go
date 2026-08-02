@@ -1,3 +1,9 @@
+// Package lineitem exposes the line item service over HTTP.
+//
+// It is the outermost of three layers and holds no rules: it parses input,
+// calls one service method, and maps the resulting error to a status code. The
+// rules it enforces on a client's behalf live in
+// backend/internal/service/lineitem.
 package lineitem
 
 import (
@@ -7,6 +13,7 @@ import (
 	"time"
 
 	"backend/db"
+	service "backend/internal/service/lineitem"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -16,11 +23,11 @@ import (
 // input, calls one service method, and maps the resulting error to a status
 // code.
 type Handler struct {
-	svc Service
+	svc service.Service
 }
 
 // NewHandler returns a handler backed by the given service.
-func NewHandler(svc Service) *Handler {
+func NewHandler(svc service.Service) *Handler {
 	return &Handler{svc: svc}
 }
 
@@ -109,7 +116,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	item, err := h.svc.Create(c.Request.Context(), CreateInput{
+	item, err := h.svc.Create(c.Request.Context(), service.CreateInput{
 		PurchaseRequestID:    prID,
 		EstimatedQuantity:    req.EstimatedQuantity,
 		EstimatedCostPerItem: req.EstimatedCostPerItem,
@@ -191,7 +198,7 @@ func (h *Handler) UpdateEstimates(c *gin.Context) {
 	}
 
 	item, err := h.svc.UpdateEstimates(
-		c.Request.Context(), id, EstimatesInput(req),
+		c.Request.Context(), id, service.EstimatesInput(req),
 	)
 	if err != nil {
 		fail(c, err)
@@ -211,7 +218,9 @@ func (h *Handler) UpdateActuals(c *gin.Context) {
 		return
 	}
 
-	item, err := h.svc.UpdateActuals(c.Request.Context(), id, ActualsInput(req))
+	item, err := h.svc.UpdateActuals(
+		c.Request.Context(), id, service.ActualsInput(req),
+	)
 	if err != nil {
 		fail(c, err)
 		return
@@ -309,11 +318,12 @@ func bindJSON(c *gin.Context, target any) bool {
 // but attached to the context so logging middleware can record it.
 func fail(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, ErrNotFound):
+	case errors.Is(err, service.ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-	case errors.Is(err, ErrValidation):
+	case errors.Is(err, service.ErrValidation):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	case errors.Is(err, ErrInvalidTransition), errors.Is(err, ErrImmutableField):
+	case errors.Is(err, service.ErrInvalidTransition),
+		errors.Is(err, service.ErrImmutableField):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	default:
 		_ = c.Error(err)
@@ -322,7 +332,7 @@ func fail(c *gin.Context, err error) {
 }
 
 func toResponse(item db.LineItem) lineItemResponse {
-	next := NextStates(item.Status)
+	next := service.NextStates(item.Status)
 	allowed := make([]string, len(next))
 	for i, status := range next {
 		allowed[i] = string(status)

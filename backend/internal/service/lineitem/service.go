@@ -61,6 +61,31 @@ type Totals struct {
 	ActualTotal    int64
 }
 
+// Repository is the data access the service needs. It is declared here, by the
+// consumer, rather than in the data layer: the service states what it requires
+// and any implementation satisfying it will do, which is what lets the rules
+// below be tested against an in-memory fake with no database.
+//
+// backend/internal/repository/lineitem is the Postgres implementation.
+type Repository interface {
+	GetLineItemByID(ctx context.Context, id int64) (db.LineItem, error)
+	GetLineItemsByPRID(ctx context.Context, prID int64) ([]db.LineItem, error)
+	GetLineItemsByReimbID(
+		ctx context.Context,
+		reimbID pgtype.Int8,
+	) ([]db.LineItem, error)
+	ListLineItems(ctx context.Context, limit int32) ([]db.LineItem, error)
+	CreateLineItem(
+		ctx context.Context,
+		arg db.CreateLineItemParams,
+	) (db.LineItem, error)
+	UpdateLineItem(
+		ctx context.Context,
+		arg db.UpdateLineItemParams,
+	) (db.LineItem, error)
+	DeleteLineItem(ctx context.Context, id int64) error
+}
+
 // Service holds the line item business rules: the status lifecycle, the field
 // mutability rules that follow from it, and input validation.
 //
