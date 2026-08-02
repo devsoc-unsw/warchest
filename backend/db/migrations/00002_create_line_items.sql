@@ -31,8 +31,8 @@ CREATE TABLE line_items (
     -- these should be foreign keys but since idk what the other tables/names are called i haven't
     -- referenced them
 
-	status line_item_status,
-    is_active BOOLEAN,
+	status line_item_status NOT NULL DEFAULT 'pr_draft',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
 	-- logging
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
