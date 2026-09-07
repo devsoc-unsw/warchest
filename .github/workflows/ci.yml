@@ -70,7 +70,7 @@ jobs:
       - name: Wait for Spicedb to start
         run: |
           for i in $(seq 1 30); do
-           (echo > /dev/tcp/localhost50051) >/dev/null 2>&1 && exit 0
+           (echo > /dev/tcp/localhost/50051) >/dev/null 2>&1 && exit 0
            sleep 1
           done
           echo "Spicedb failed to start" && exit 1
