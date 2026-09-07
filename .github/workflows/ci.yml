@@ -44,9 +44,20 @@ jobs:
   # ==========================================
   fast-checks-backend:
     runs-on: ubuntu-latest
+    services:
+      spicedb:
+        image: authzed/spicedb
+        ports:
+        - 50051:50051
+        env:
+          SPICEDB_GRPC_PRESHARED_KEY: "warchest"
+          SPICEDB_DATASTORE_ENGINE: memory
     defaults:
       run:
         working-directory: ./backend
+    env:
+      SPICEDB_ADDRESS: localhost:50051
+      SPICEDB_PRESHARED_KEY: "warchest"
     steps: 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,7 +67,13 @@ jobs:
         with:
           go-version: '1.22'
           cache: true
-
+      - name: Wait for Spicedb to start
+        run: |
+          for i in $(seq 1 30); do
+           (echo > /dev/tcp/localhost50051) >/dev/null 2>&1 && exit 0
+           sleep 1
+          done
+          echo "Spicedb failed to start" && exit 1
       - name: Install Go Dependencies
         run: go mod download
 
