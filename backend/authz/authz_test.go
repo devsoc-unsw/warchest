@@ -1,38 +1,38 @@
 package authz
 
 import (
+	"context"
 	"log"
 	"os"
 	"testing"
+	"time"
 
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	"github.com/authzed/authzed-go/v1"
 )
 
-// createRelation writes a relationship and logs any error,
-// so callers in Test don't need to repeat the same error-check block.
 func createRelation(
+	ctx context.Context,
 	client *authzed.Client,
 	resourceType, resourceID, relation, subjectType, subjectID string,
 ) {
 	_, err := WriteRelationship(
-		client, resourceType, resourceID, relation,
-		subjectType, subjectID,
+		ctx, client, resourceType, resourceID, relation,
+		subjectType, subjectID, "",
 	)
 	if err != nil {
 		log.Printf("failed to write relationship: %s", err)
 	}
 }
 
-// checkBobCanCreateEvents runs the permission check for Bob and
-// logs the outcome, keeping this logic out of Test's statement count.
-func checkBobCanCreateEvents(client *authzed.Client) {
+func checkBobCanCreateEvents(ctx context.Context, client *authzed.Client) {
 	result, err := CheckPermission(
-		client, "organisation", "example_org", "event_create",
+		ctx, client, "organisation", "example_org", "event_create",
 		"user", "Bob",
 	)
 	if err != nil {
 		log.Printf("Permission check failed: %s", err)
+		return
 	}
 
 	if result.Permissionship ==
@@ -47,46 +47,48 @@ func Test(t *testing.T) {
 	spicedbAddr := os.Getenv("SPICEDB_ADDRESS")
 	spicedbKey := os.Getenv("SPICEDB_PRESHARED_KEY")
 
-	authzClient, err := NewClient(spicedbAddr, spicedbKey)
+	authzClient, err := BuildClient(spicedbAddr, spicedbKey)
 	if err != nil {
 		log.Fatalf("failed to connect to spicedb: %s", err)
 	}
 
-	// Authzed route testing
-	err = WriteSchemaFromFile(authzClient, "spicedb_schema.zed")
+	// Context to prevent blocking calls
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel() // Releases resources when the test finishes to avoid waiting on the timer
+
+	err = WriteSchemaFromFile(ctx, authzClient, "spicedb_schema.zed")
 	if err != nil {
 		log.Printf("failed to write schema: %s", err)
 	}
 
 	createRelation(
-		authzClient, "organisation", "example_org",
+		ctx, authzClient, "organisation", "example_org",
 		"treasurer", "user", "John_Doe",
 	)
 	createRelation(
-		authzClient, "organisation", "example_org",
+		ctx, authzClient, "organisation", "example_org",
 		"subcom", "user", "Bob",
 	)
 
-	// Create an event with certain members
 	createRelation(
-		authzClient, "event", "example_event",
+		ctx, authzClient, "event", "example_event",
 		"member", "user", "Bob1",
 	)
 	createRelation(
-		authzClient, "event", "example_event2",
+		ctx, authzClient, "event", "example_event2",
 		"member", "user", "Bob1",
 	)
 	createRelation(
-		authzClient, "event", "example_event",
+		ctx, authzClient, "event", "example_event",
 		"member", "user", "Bob2",
 	)
 	createRelation(
-		authzClient, "event", "example_event",
+		ctx, authzClient, "event", "example_event",
 		"member", "user", "Bob3",
 	)
 
 	relations, err := ReadRelationships(
-		authzClient, "event", "example_event", "",
+		ctx, authzClient, "event", "example_event", "",
 	)
 	if err != nil {
 		log.Printf("failed to read relationships: %s", err)
@@ -94,7 +96,7 @@ func Test(t *testing.T) {
 	log.Printf("%+v %v", relations, err)
 
 	resources, err := LookupResources(
-		authzClient, "event", "user", "Bob1", "view",
+		ctx, authzClient, "event", "user", "Bob1", "view",
 	)
 	if err != nil {
 		log.Printf("failed to lookupResources: %s", err)
@@ -102,7 +104,7 @@ func Test(t *testing.T) {
 	log.Printf("resources: %v", resources)
 
 	subjects, err := LookupSubjects(
-		authzClient, "user", "event", "example_event", "view",
+		ctx, authzClient, "user", "event", "example_event", "view",
 	)
 	if err != nil {
 		log.Printf("failed to lookupSubjects: %s", err)
@@ -110,7 +112,7 @@ func Test(t *testing.T) {
 	log.Printf("subjects: %v", subjects)
 
 	_, err = DeleteRelationship(
-		authzClient, "event", "example_event",
+		ctx, authzClient, "event", "example_event",
 		"member", "user", "Bob3",
 	)
 	if err != nil {
@@ -118,14 +120,14 @@ func Test(t *testing.T) {
 	}
 
 	subjects, err = LookupSubjects(
-		authzClient, "user", "event", "example_event", "view",
+		ctx, authzClient, "user", "event", "example_event", "view",
 	)
 	if err != nil {
 		log.Printf("failed to lookupSubjects: %s", err)
 	}
 	log.Printf("subjects: %v", subjects)
 
-	checkBobCanCreateEvents(authzClient)
+	checkBobCanCreateEvents(ctx, authzClient)
 
-	log.Printf("Success")
+	log.Printf("End of test")
 }

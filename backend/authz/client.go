@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 	"os"
 
@@ -9,10 +10,22 @@ import (
 	"github.com/authzed/authzed-go/v1"
 	"github.com/authzed/grpcutil"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 func NewClient(addr, presharedKey string) (*authzed.Client, error) {
+	// Secure connection rpc connection with TLS
+	creds := credentials.NewTLS(&tls.Config{})
+	return authzed.NewClient(
+		addr,
+		grpcutil.WithBearerToken(presharedKey),
+		grpc.WithTransportCredentials(creds),
+	)
+}
+
+// NewInsecureClient is for local development and CI only. Do not use in a real deployment.
+func NewInsecureClient(addr, presharedKey string) (*authzed.Client, error) {
 	return authzed.NewClient(
 		addr,
 		grpcutil.WithInsecureBearerToken(presharedKey),
@@ -20,7 +33,14 @@ func NewClient(addr, presharedKey string) (*authzed.Client, error) {
 	)
 }
 
-func WriteSchemaFromFile(client *authzed.Client, path string) error {
+func BuildClient(addr, presharedKey string) (*authzed.Client, error) {
+	if os.Getenv("SPICEDB_INSECURE_MODE") == "true" {
+		return NewInsecureClient(addr, presharedKey)
+	}
+	return NewClient(addr, presharedKey)
+}
+
+func WriteSchemaFromFile(ctx context.Context, client *authzed.Client, path string) error {
 	schemaBytes, err := os.ReadFile(path)
 	if err != nil {
 		log.Println("path not found")
@@ -28,7 +48,7 @@ func WriteSchemaFromFile(client *authzed.Client, path string) error {
 	}
 
 	_, err = client.WriteSchema(
-		context.Background(),
+		ctx,
 		&v1.WriteSchemaRequest{Schema: string(schemaBytes)},
 	)
 	if err != nil {

@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
@@ -9,9 +10,24 @@ import (
 )
 
 func WriteRelationship(
+	ctx context.Context,
 	client *authzed.Client,
-	resourceType, resourceID, relation, subjectType, subjectID string,
+	resourceType, resourceID, relation, subjectType, subjectID string, subjectRelation string,
 ) (*v1.WriteRelationshipsResponse, error) {
+	if resourceID == "" || relation == "" || subjectID == "" {
+		return nil, fmt.Errorf("resourceID, relation, and subjectID cannot be empty")
+	}
+	ref := &v1.SubjectReference{
+		Object: &v1.ObjectReference{
+			ObjectType: subjectType,
+			ObjectId:   subjectID,
+		},
+	}
+	// Allows multiple individuals in a relation to be written to
+	if subjectRelation != "" {
+		ref.OptionalRelation = subjectRelation
+	}
+
 	req := &v1.WriteRelationshipsRequest{
 		Updates: []*v1.RelationshipUpdate{
 			{
@@ -22,22 +38,18 @@ func WriteRelationship(
 						ObjectId:   resourceID,
 					},
 					Relation: relation,
-					Subject: &v1.SubjectReference{
-						Object: &v1.ObjectReference{
-							ObjectType: subjectType,
-							ObjectId:   subjectID,
-						},
-					},
+					Subject:  ref,
 				},
 			},
 		},
 	}
 
-	result, err := client.WriteRelationships(context.Background(), req)
+	result, err := client.WriteRelationships(ctx, req)
 	return result, err
 }
 
 func CheckPermission(
+	ctx context.Context,
 	client *authzed.Client,
 	resourceType, resourceID, permission, subjectType, subjectID string,
 ) (*v1.CheckPermissionResponse, error) {
@@ -60,14 +72,18 @@ func CheckPermission(
 		},
 	}
 
-	result, err := client.CheckPermission(context.Background(), req)
+	result, err := client.CheckPermission(ctx, req)
 	return result, err
 }
 
 func DeleteRelationship(
+	ctx context.Context,
 	client *authzed.Client,
 	resourceType, resourceID, relation, subjectType, subjectID string,
 ) (*v1.DeleteRelationshipsResponse, error) {
+	if resourceID == "" || relation == "" || subjectID == "" {
+		return nil, fmt.Errorf("resource / subject ID and relation cannot be empty")
+	}
 	req := &v1.DeleteRelationshipsRequest{
 		RelationshipFilter: &v1.RelationshipFilter{
 			ResourceType:       resourceType,
@@ -80,7 +96,7 @@ func DeleteRelationship(
 		},
 	}
 
-	result, err := client.DeleteRelationships(context.Background(), req)
+	result, err := client.DeleteRelationships(ctx, req)
 	return result, err
 }
 
@@ -88,6 +104,7 @@ func DeleteRelationship(
 // Example: Who are the treasurers? What relationships exist for
 // a certain resource?
 func ReadRelationships(
+	ctx context.Context,
 	client *authzed.Client,
 	resourceType, resourceID, relation string,
 ) ([]*v1.Relationship, error) {
@@ -104,7 +121,7 @@ func ReadRelationships(
 		},
 	}
 
-	stream, err := client.ReadRelationships(context.Background(), req)
+	stream, err := client.ReadRelationships(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +143,7 @@ func ReadRelationships(
 // Y access via permission Z.
 // Example: What events can the treasurer bob view?
 func LookupResources(
+	ctx context.Context,
 	client *authzed.Client,
 	resourceType, subjectType, subjectID, permission string,
 ) ([]string, error) {
@@ -145,7 +163,7 @@ func LookupResources(
 		},
 	}
 
-	stream, err := client.LookupResources(context.Background(), req)
+	stream, err := client.LookupResources(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +187,7 @@ func LookupResources(
 // via permission Z.
 // Example: Who can currently view an event?
 func LookupSubjects(
+	ctx context.Context,
 	client *authzed.Client,
 	subjectType, resourceType, resourceID, permission string,
 ) ([]string, error) {
@@ -186,7 +205,7 @@ func LookupSubjects(
 		},
 	}
 
-	stream, err := client.LookupSubjects(context.Background(), req)
+	stream, err := client.LookupSubjects(ctx, req)
 	if err != nil {
 		return nil, err
 	}
