@@ -14,6 +14,8 @@ services:
       - BE_DATABASE_URL=postgres://postgres:password@warchest-postgres-be:5432/warchest
       - MM_DATABASE_URL=postgres://postgres:password@warchest-postgres-mm:5432/money_module
       - TIGERBEETLE_ADDRESS=tigerbeetle:3000
+      - SPICEDB_ADDRESS=warchest-spicedb:50051
+      - SPICEDB_PRESHARED_KEY=warchestdabest
     networks:
       - devsoc-network
     depends_on:
@@ -22,6 +24,8 @@ services:
       warchest-postgres-mm:
         condition: service_healthy
       warchest-tigerbeetle:
+        condition: service_started
+      warchest-spicedb:
         condition: service_started
     security_opt:
       - seccomp:unconfined
@@ -69,6 +73,28 @@ services:
     security_opt:
       - seccomp:unconfined
 
+  warchest-spicedb:
+    container_name: warchest-spicedb
+    image: authzed/spicedb
+    restart: "no"
+    command: "serve"
+    ports:
+      - "50051:50051"
+    environment:
+      - "SPICEDB_LOG_FORMAT=json"
+      - "SPICEDB_LOG_LEVEL=info"
+      - "SPICEDB_GRPC_PRESHARED_KEY=warchestdabest"
+      - "SPICEDB_DATASTORE_ENGINE=memory"
+      - "SPICEDB_STREAMING_API_RESPONSE_DELAY_TIMEOUT=0s"
+      - "SPICEDB_ENABLE_PERFORMANCE_INSIGHT_METRICS=true"
+    networks:
+      - devsoc-network
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      interval: "5s"
+      timeout: "30s"
+      retries: 3
+      
 volumes:
   postgres_be_data:
   postgres_mm_data:

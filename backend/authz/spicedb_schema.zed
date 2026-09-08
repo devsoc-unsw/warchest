@@ -1,0 +1,48 @@
+definition user {}
+
+definition organisation {
+    relation treasurer: user
+    relation exec: user | organisation#treasurer
+    relation director: user | organisation#exec
+    relation subcom: user | organisation#director
+    
+    permission user_update_role = exec
+    permission user_remove = exec
+    permission event_create = exec
+}
+
+    
+definition event {
+    relation org: organisation
+    relation event_manager: user
+    relation member: user
+
+    permission treasurer = org->treasurer
+    permission admin = org->director + event_manager
+    permission delete = org->exec + event_manager
+    permission request_budget = admin
+    permission assign_items = admin
+    permission edit_items = admin
+    permission view_budget = admin
+    permission archive = admin
+    permission view_archive = admin
+
+    permission edit_archive = org->exec
+
+    permission view = member + admin + event_manager
+    permission view_items = member + admin + event_manager
+    permission purchase_request = member + admin + event_manager
+
+}
+
+//Budget Permissions: 
+definition budget {
+    relation event: event
+
+    permission budget_allocate = event->treasurer
+    permission budget_request_accept = event->treasurer
+    permission budget_view_boards = event->treasurer  
+}  
+
+
+
