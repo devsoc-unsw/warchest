@@ -24,7 +24,7 @@ func NewClient(addr, presharedKey string) (*authzed.Client, error) {
 	)
 }
 
-// NewInsecureClient is for local development and CI only. Do not use in a real deployment.
+// NewInsecureClient is for local development and CI only
 func NewInsecureClient(addr, presharedKey string) (*authzed.Client, error) {
 	return authzed.NewClient(
 		addr,
@@ -40,7 +40,10 @@ func BuildClient(addr, presharedKey string) (*authzed.Client, error) {
 	return NewClient(addr, presharedKey)
 }
 
-func WriteSchemaFromFile(ctx context.Context, client *authzed.Client, path string) error {
+func WriteSchemaFromFile(
+	ctx context.Context,
+	client *authzed.Client,
+	path string) error {
 	schemaBytes, err := os.ReadFile(path)
 	if err != nil {
 		log.Println("path not found")

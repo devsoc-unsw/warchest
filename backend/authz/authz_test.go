@@ -54,7 +54,8 @@ func Test(t *testing.T) {
 
 	// Context to prevent blocking calls
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel() // Releases resources when the test finishes to avoid waiting on the timer
+	// Releases resources when the test finishes to avoid waiting on timer
+	defer cancel()
 
 	err = WriteSchemaFromFile(ctx, authzClient, "spicedb_schema.zed")
 	if err != nil {

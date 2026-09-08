@@ -12,7 +12,8 @@ import (
 func WriteRelationship(
 	ctx context.Context,
 	client *authzed.Client,
-	resourceType, resourceID, relation, subjectType, subjectID string, subjectRelation string,
+	resourceType, resourceID, relation, subjectType, subjectID string,
+	subjectRelation string,
 ) (*v1.WriteRelationshipsResponse, error) {
 	if resourceID == "" || relation == "" || subjectID == "" {
 		return nil, fmt.Errorf("resourceID, relation, and subjectID cannot be empty")
