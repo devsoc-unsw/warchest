@@ -70,7 +70,7 @@ services:
       - seccomp:unconfined
   mock-spicedb:
     container_name: "spicedb"
-    build: "."
+    image: authzed/spicedb:v1.39.0 
     command: "serve"
     restart: "no"
     ports:
