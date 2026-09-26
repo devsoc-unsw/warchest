@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     ripgrep \
     golang \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://bun.com/install | bash
 
@@ -31,11 +32,11 @@ RUN go install golang.org/x/tools/gopls@latest \
 RUN { \
     echo '# Function to get the current git branch'; \
     echo 'parse_git_branch() {'; \
-    echo '  git branch 2> /dev/null | sed -e "/^[^*]/d" -e "s/* \(.*\)/ (\1)/"'; \
+    echo '  git branch 2> /dev/null | sed -e "/^[^*]/d" -e "s/* \\(.*\\)/ (\\1)/"'; \
     echo '}'; \
     echo ''; \
     echo '# Set custom colored prompt: user@[devcontainer] path (git branch)'; \
-    echo 'export PS1="\[\033[0;32m\]\u\[\033[0m\]@\[\033[1;32m\][devcontainer]\[\033[0m\] \[\033[0;34m\]\w\[\033[0m\]\[\033[0;33m\]\$(parse_git_branch)\[\033[0m\] $ "'; \
+    echo 'export PS1="\\[\\033[1;32m\\][devcontainer]\\[\\033[0m\\] \\[\\033[0;34m\\]\\w\\[\\033[0m\\]\\[\\033[0;33m\\]\\$(parse_git_branch)\\[\\033[0m\\] $ "'; \
     echo '# Enable colors for ls'; \
     echo 'alias ls="ls --color=auto"'; \
     echo 'alias ll="ls -alF --color=auto"'; \
