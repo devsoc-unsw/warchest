@@ -1,15 +1,14 @@
 package main
 
 import (
-	"context"
-	"log"
 	"backend/db"
-	"backend/internal/event"
+	"backend/internal/wire"
+	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-
+	"log"
 )
 
 func main() {
@@ -20,15 +19,14 @@ func main() {
 		log.Fatalf("failed to connect db: %v", err)
 	}
 	defer pool.Close()
+	// sqlc queries
 	queries := db.New(pool)
-
+	// Gin HTTP router
 	router := gin.Default()
 
 	// each module wires it own
-	event.Wire(queries, router)
+	wire.WireEvent(queries, router)
 
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
 	router.Run(":8080")
-
 }

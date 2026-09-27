@@ -1,11 +1,11 @@
 // talks directly to the database, forwarded to db.Queries
 // this layer separate data access from business logic
 
-package event
+package repository
 
-import(
-	"context"
+import (
 	"backend/db"
+	"context"
 )
 
 // what methods do we have for event
@@ -27,7 +27,7 @@ func NewEventRepository(queries *db.Queries) EventRepository {
 }
 
 // write func for eventRepositoryImpl to CreateEvent
-func (r *eventRepositoryImpl) CreateEvent(ctx context.Context, params db.CreateEventParams) (db.Event, error){
+func (r *eventRepositoryImpl) CreateEvent(ctx context.Context, params db.CreateEventParams) (db.Event, error) {
 	// (r *eventRepositoryImpl) is the receiver, this method belongs to the object r
 	return r.queries.CreateEvent(ctx, params) // simply call sqlc-generated method and return the result
 }

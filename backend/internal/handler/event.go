@@ -1,18 +1,20 @@
 // receive HTTP requests and pass data to the service
 
-package event
+package handler
 
 import (
+	"backend/internal/service"
 	"net/http"
 	"time"
+
 	"github.com/gin-gonic/gin"
 )
 
 type EventHandler struct {
-	service EventService
+	service service.EventService
 }
 
-func NewEventHandler(service EventService) *EventHandler {
+func NewEventHandler(service service.EventService) *EventHandler {
 	return &EventHandler{service: service}
 }
 
@@ -29,7 +31,7 @@ type createEventRequest struct {
 
 // read json, use EventService, return http code
 // parses the JSON request body into req
-func(h *EventHandler) CreateEvent(c *gin.Context) {
+func (h *EventHandler) CreateEvent(c *gin.Context) {
 	// declares a variable req createEventRequest
 	var req createEventRequest
 
