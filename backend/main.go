@@ -4,11 +4,12 @@ import (
 	"backend/db"
 	"backend/internal/wire"
 	"context"
+	"log"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	"log"
 )
 
 func main() {
@@ -28,5 +29,7 @@ func main() {
 	wire.WireEvent(queries, router)
 
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	router.Run(":8080")
+	if err := router.Run(":8080"); err != nil {
+		panic(err)
+	}
 }

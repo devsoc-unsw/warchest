@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"time"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -61,13 +62,15 @@ func (s *eventServiceImpl) CreateEvent(
 	}
 	// convert plain types into pgtype
 	// convert time.Time to pytype.Timestamptz
-	eventTimePG := pgtype.Timestamptz{Time: eventTime, Valid: true,}
+	eventTimePG := pgtype.Timestamptz{Time: eventTime, Valid: true}
 	// convert string to Text
-	locationPG := pgtype.Text{String: location, Valid: true,}
-	descriptionPG := pgtype.Text{String: description, Valid: description != "",}
+	locationPG := pgtype.Text{String: location, Valid: true}
+	descriptionPG := pgtype.Text{String: description, Valid: description != ""}
 	// convert float64 to Numeric
 	var budgetPG pgtype.Numeric
-	if err := budgetPG.Scan(budget); err != nil {return db.Event{}, err}
+	if err := budgetPG.Scan(budget); err != nil {
+		return db.Event{}, err
+	}
 	// convert societyID string to UUID
 	var societyIDPG pgtype.UUID
 	if err := societyIDPG.Scan(societyID); err != nil {
@@ -82,7 +85,7 @@ func (s *eventServiceImpl) CreateEvent(
 		EventName:   name,
 		EventTime:   eventTimePG,
 		Budget:      budgetPG,
-		Status: status,
+		Status:      status,
 		Location:    locationPG,
 		Description: descriptionPG,
 		SocietyID:   societyIDPG,

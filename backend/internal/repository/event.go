@@ -21,13 +21,17 @@ type eventRepositoryImpl struct {
 
 // constructor function to create eventRepositoryImpl
 func NewEventRepository(queries *db.Queries) EventRepository {
-	return &eventRepositoryImpl{queries: queries} // stores the incoming queries into its queries field
+	// stores the incoming queries into its queries field
+	return &eventRepositoryImpl{queries: queries}
 	// & read pointer
-
 }
 
 // write func for eventRepositoryImpl to CreateEvent
-func (r *eventRepositoryImpl) CreateEvent(ctx context.Context, params db.CreateEventParams) (db.Event, error) {
+func (r *eventRepositoryImpl) CreateEvent(
+	ctx context.Context,
+	params db.CreateEventParams,
+) (db.Event, error) {
 	// (r *eventRepositoryImpl) is the receiver, this method belongs to the object r
-	return r.queries.CreateEvent(ctx, params) // simply call sqlc-generated method and return the result
+	return r.queries.CreateEvent(ctx, params)
+	// simply call sqlc-generated method and return the result
 }

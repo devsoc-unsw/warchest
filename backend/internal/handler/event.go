@@ -3,10 +3,11 @@
 package handler
 
 import (
+	"backend/db"
 	"backend/internal/service"
 	"net/http"
 	"time"
-	"backend/db"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,14 +21,14 @@ func NewEventHandler(service service.EventService) *EventHandler {
 
 // JSON from frontend
 type createEventRequest struct {
-	Name        string    `json:"event_name"`
-	EventTime   time.Time `json:"event_time"`
-	Budget      float64   `json:"budget"`
+	Name        string         `json:"event_name"`
+	EventTime   time.Time      `json:"event_time"`
+	Budget      float64        `json:"budget"`
 	Status      db.EventStatus `json:"status"`
-	Location    string    `json:"location"`
-	Description string    `json:"description"`
-	SocietyID   string    `json:"society_id"`
-	CreatedBy   string     `json:"created_by"`
+	Location    string         `json:"location"`
+	Description string         `json:"description"`
+	SocietyID   string         `json:"society_id"`
+	CreatedBy   string         `json:"created_by"`
 }
 
 // read json, use EventService, return http code
@@ -55,7 +56,8 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 
 	// check err
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()}) // convert error type into a string
+		// convert error type into a string
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	// return 201, and created data.
