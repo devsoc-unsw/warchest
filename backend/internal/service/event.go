@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -20,10 +19,11 @@ type EventService interface {
 		name string,
 		eventTime time.Time,
 		budget float64,
+		status db.EventStatus,
 		location string,
 		description string,
 		societyID string,
-		createdBy int64,
+		createdBy string,
 	) (db.Event, error)
 	// add more... delete/update...
 }
@@ -42,10 +42,11 @@ func (s *eventServiceImpl) CreateEvent(
 	name string,
 	eventTime time.Time,
 	budget float64,
+	status db.EventStatus,
 	location string,
 	description string,
 	societyID string,
-	createdBy int64,
+	createdBy string,
 ) (db.Event, error) {
 	// logic and validation
 	// TODO: auth check
@@ -58,10 +59,35 @@ func (s *eventServiceImpl) CreateEvent(
 	if budget < 0 {
 		return db.Event{}, errors.New("budget could not be negative")
 	}
-	// TODO: convert plain types into pgtype
+	// convert plain types into pgtype
+	// convert time.Time to pytype.Timestamptz
 	eventTimePG := pgtype.Timestamptz{Time: eventTime, Valid: true,}
+	// convert string to Text
 	locationPG := pgtype.Text{String: location, Valid: true,}
-	
-	// TODO: create the event
-	return db.Event{}, errors.New("TODO: create event not implemented")
+	descriptionPG := pgtype.Text{String: description, Valid: description != "",}
+	// convert float64 to Numeric
+	var budgetPG pgtype.Numeric
+	if err := budgetPG.Scan(budget); err != nil {return db.Event{}, err}
+	// convert societyID string to UUID
+	var societyIDPG pgtype.UUID
+	if err := societyIDPG.Scan(societyID); err != nil {
+		return db.Event{}, errors.New("invalid society ID")
+	}
+	// convert createdBy string to UUID
+	var createdByPG pgtype.UUID
+	if err := createdByPG.Scan(createdBy); err != nil {
+		return db.Event{}, errors.New("invalid created by ID")
+	}
+	params := db.CreateEventParams{
+		EventName:   name,
+		EventTime:   eventTimePG,
+		Budget:      budgetPG,
+		Status: status,
+		Location:    locationPG,
+		Description: descriptionPG,
+		SocietyID:   societyIDPG,
+		CreatedBy:   createdByPG,
+	}
+	// create the event
+	return s.repo.CreateEvent(ctx, params)
 }

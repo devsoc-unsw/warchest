@@ -12,12 +12,13 @@ INSERT INTO events (
     event_name,
     event_time,
     budget,
+    status,
     location,
     description,
     society_id,
     created_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8
 )
 RETURNING *;
 

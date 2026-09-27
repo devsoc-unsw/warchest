@@ -45,12 +45,13 @@ INSERT INTO events (
     event_name,
     event_time,
     budget,
+    status,
     location,
     description,
     society_id,
     created_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8
 )
 RETURNING id, user_id, event_name, event_time, budget, status, location, description, society_id, created_by, created_at, updated_at
 `
@@ -59,6 +60,7 @@ type CreateEventParams struct {
 	EventName   string
 	EventTime   pgtype.Timestamptz
 	Budget      pgtype.Numeric
+	Status      EventStatus
 	Location    pgtype.Text
 	Description pgtype.Text
 	SocietyID   pgtype.UUID
@@ -70,6 +72,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event
 		arg.EventName,
 		arg.EventTime,
 		arg.Budget,
+		arg.Status,
 		arg.Location,
 		arg.Description,
 		arg.SocietyID,

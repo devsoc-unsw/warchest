@@ -6,7 +6,7 @@ import (
 	"backend/internal/service"
 	"net/http"
 	"time"
-
+	"backend/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -23,10 +23,11 @@ type createEventRequest struct {
 	Name        string    `json:"event_name"`
 	EventTime   time.Time `json:"event_time"`
 	Budget      float64   `json:"budget"`
+	Status      db.EventStatus `json:"status"`
 	Location    string    `json:"location"`
 	Description string    `json:"description"`
 	SocietyID   string    `json:"society_id"`
-	CreatedBy   int64     `json:"created_by"`
+	CreatedBy   string     `json:"created_by"`
 }
 
 // read json, use EventService, return http code
@@ -45,6 +46,7 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		req.Name,
 		req.EventTime,
 		req.Budget,
+		req.Status,
 		req.Location,
 		req.Description,
 		req.SocietyID,
