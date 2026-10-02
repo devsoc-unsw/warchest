@@ -59,7 +59,7 @@ RETURNING id, user_id, event_name, event_time, budget, status, location, descrip
 type CreateEventParams struct {
 	EventName   string
 	EventTime   pgtype.Timestamptz
-	Budget      pgtype.Numeric
+	Budget      int64
 	Status      EventStatus
 	Location    pgtype.Text
 	Description pgtype.Text
@@ -121,19 +121,19 @@ func (q *Queries) GetEvent(ctx context.Context, id pgtype.UUID) (Event, error) {
 	return i, err
 }
 
-const listEvent = `-- name: ListEvent :many
+const listEvents = `-- name: ListEvents :many
 SELECT id, user_id, event_name, event_time, budget, status, location, description, society_id, created_by, created_at, updated_at FROM events
-WHERE id = $1 AND status = $2
+WHERE society_id = $1 AND status = $2
 ORDER BY event_time
 `
 
-type ListEventParams struct {
-	ID     pgtype.UUID
-	Status EventStatus
+type ListEventsParams struct {
+	SocietyID pgtype.UUID
+	Status    EventStatus
 }
 
-func (q *Queries) ListEvent(ctx context.Context, arg ListEventParams) ([]Event, error) {
-	rows, err := q.db.Query(ctx, listEvent, arg.ID, arg.Status)
+func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]Event, error) {
+	rows, err := q.db.Query(ctx, listEvents, arg.SocietyID, arg.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ type UpdateEventParams struct {
 	ID          pgtype.UUID
 	EventName   string
 	EventTime   pgtype.Timestamptz
-	Budget      pgtype.Numeric
+	Budget      int64
 	Location    pgtype.Text
 	Description pgtype.Text
 }

@@ -19,7 +19,7 @@ type EventService interface {
 		ctx context.Context,
 		name string,
 		eventTime time.Time,
-		budget float64,
+		budget int64,
 		status db.EventStatus,
 		location string,
 		description string,
@@ -42,7 +42,7 @@ func (s *eventServiceImpl) CreateEvent(
 	ctx context.Context,
 	name string,
 	eventTime time.Time,
-	budget float64,
+	budget int64,
 	status db.EventStatus,
 	location string,
 	description string,
@@ -66,11 +66,6 @@ func (s *eventServiceImpl) CreateEvent(
 	// convert string to Text
 	locationPG := pgtype.Text{String: location, Valid: true}
 	descriptionPG := pgtype.Text{String: description, Valid: description != ""}
-	// convert float64 to Numeric
-	var budgetPG pgtype.Numeric
-	if err := budgetPG.Scan(budget); err != nil {
-		return db.Event{}, err
-	}
 	// convert societyID string to UUID
 	var societyIDPG pgtype.UUID
 	if err := societyIDPG.Scan(societyID); err != nil {
@@ -84,7 +79,7 @@ func (s *eventServiceImpl) CreateEvent(
 	params := db.CreateEventParams{
 		EventName:   name,
 		EventTime:   eventTimePG,
-		Budget:      budgetPG,
+		Budget:      budget,
 		Status:      status,
 		Location:    locationPG,
 		Description: descriptionPG,

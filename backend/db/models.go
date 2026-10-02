@@ -56,10 +56,10 @@ func (ns NullEventStatus) Value() (driver.Value, error) {
 
 type Event struct {
 	ID          pgtype.UUID
-	UserID      pgtype.Int4
+	UserID      pgtype.Int8
 	EventName   string
 	EventTime   pgtype.Timestamptz
-	Budget      pgtype.Numeric
+	Budget      int64
 	Status      EventStatus
 	Location    pgtype.Text
 	Description pgtype.Text

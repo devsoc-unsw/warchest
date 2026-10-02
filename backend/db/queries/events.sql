@@ -2,9 +2,9 @@
 SELECT * FROM events
 WHERE id = $1 LIMIT 1;
 
--- name: ListEvent :many
+-- name: ListEvents :many
 SELECT * FROM events
-WHERE id = $1 AND status = $2
+WHERE society_id = $1 AND status = $2
 ORDER BY event_time;
 
 -- name: CreateEvent :one

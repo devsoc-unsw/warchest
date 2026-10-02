@@ -23,7 +23,7 @@ func NewEventHandler(service service.EventService) *EventHandler {
 type createEventRequest struct {
 	Name        string         `json:"event_name"`
 	EventTime   time.Time      `json:"event_time"`
-	Budget      float64        `json:"budget"`
+	Budget      int64          `json:"budget"`
 	Status      db.EventStatus `json:"status"`
 	Location    string         `json:"location"`
 	Description string         `json:"description"`
