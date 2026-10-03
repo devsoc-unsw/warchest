@@ -9,38 +9,107 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as PurchaseRequestsRouteImport } from './routes/purchase-requests'
+import { Route as LineItemsRouteImport } from './routes/line-items'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PurchaseRequestsNewRouteImport } from './routes/purchase-requests.new'
+import { Route as PurchaseRequestsPurchaseRequestIdEditRouteImport } from './routes/purchase-requests.$purchaseRequestId.edit'
 
+const PurchaseRequestsRoute = PurchaseRequestsRouteImport.update({
+  id: '/purchase-requests',
+  path: '/purchase-requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LineItemsRoute = LineItemsRouteImport.update({
+  id: '/line-items',
+  path: '/line-items',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PurchaseRequestsNewRoute = PurchaseRequestsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => PurchaseRequestsRoute,
+} as any)
+const PurchaseRequestsPurchaseRequestIdEditRoute =
+  PurchaseRequestsPurchaseRequestIdEditRouteImport.update({
+    id: '/$purchaseRequestId/edit',
+    path: '/$purchaseRequestId/edit',
+    getParentRoute: () => PurchaseRequestsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/line-items': typeof LineItemsRoute
+  '/purchase-requests': typeof PurchaseRequestsRouteWithChildren
+  '/purchase-requests/new': typeof PurchaseRequestsNewRoute
+  '/purchase-requests/$purchaseRequestId/edit': typeof PurchaseRequestsPurchaseRequestIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/line-items': typeof LineItemsRoute
+  '/purchase-requests': typeof PurchaseRequestsRouteWithChildren
+  '/purchase-requests/new': typeof PurchaseRequestsNewRoute
+  '/purchase-requests/$purchaseRequestId/edit': typeof PurchaseRequestsPurchaseRequestIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/line-items': typeof LineItemsRoute
+  '/purchase-requests': typeof PurchaseRequestsRouteWithChildren
+  '/purchase-requests/new': typeof PurchaseRequestsNewRoute
+  '/purchase-requests/$purchaseRequestId/edit': typeof PurchaseRequestsPurchaseRequestIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/line-items'
+    | '/purchase-requests'
+    | '/purchase-requests/new'
+    | '/purchase-requests/$purchaseRequestId/edit'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/line-items'
+    | '/purchase-requests'
+    | '/purchase-requests/new'
+    | '/purchase-requests/$purchaseRequestId/edit'
+  id:
+    | '__root__'
+    | '/'
+    | '/line-items'
+    | '/purchase-requests'
+    | '/purchase-requests/new'
+    | '/purchase-requests/$purchaseRequestId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LineItemsRoute: typeof LineItemsRoute
+  PurchaseRequestsRoute: typeof PurchaseRequestsRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/purchase-requests': {
+      id: '/purchase-requests'
+      path: '/purchase-requests'
+      fullPath: '/purchase-requests'
+      preLoaderRoute: typeof PurchaseRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/line-items': {
+      id: '/line-items'
+      path: '/line-items'
+      fullPath: '/line-items'
+      preLoaderRoute: typeof LineItemsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +117,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/purchase-requests/new': {
+      id: '/purchase-requests/new'
+      path: '/new'
+      fullPath: '/purchase-requests/new'
+      preLoaderRoute: typeof PurchaseRequestsNewRouteImport
+      parentRoute: typeof PurchaseRequestsRoute
+    }
+    '/purchase-requests/$purchaseRequestId/edit': {
+      id: '/purchase-requests/$purchaseRequestId/edit'
+      path: '/$purchaseRequestId/edit'
+      fullPath: '/purchase-requests/$purchaseRequestId/edit'
+      preLoaderRoute: typeof PurchaseRequestsPurchaseRequestIdEditRouteImport
+      parentRoute: typeof PurchaseRequestsRoute
+    }
   }
 }
 
+interface PurchaseRequestsRouteChildren {
+  PurchaseRequestsNewRoute: typeof PurchaseRequestsNewRoute
+  PurchaseRequestsPurchaseRequestIdEditRoute: typeof PurchaseRequestsPurchaseRequestIdEditRoute
+}
+
+const PurchaseRequestsRouteChildren: PurchaseRequestsRouteChildren = {
+  PurchaseRequestsNewRoute: PurchaseRequestsNewRoute,
+  PurchaseRequestsPurchaseRequestIdEditRoute:
+    PurchaseRequestsPurchaseRequestIdEditRoute,
+}
+
+const PurchaseRequestsRouteWithChildren =
+  PurchaseRequestsRoute._addFileChildren(PurchaseRequestsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LineItemsRoute: LineItemsRoute,
+  PurchaseRequestsRoute: PurchaseRequestsRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

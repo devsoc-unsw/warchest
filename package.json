@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "@tanstack/react-router": "^1.170.18"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/bun": "latest",
+    "tailwindcss": "^4.3.3"
+  },
+  "name": "warchest",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
