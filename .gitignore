@@ -1,2 +1,4 @@
 .DS_Store
-node_modules/.env.local
+node_modules/bun-types/docs/guides/ecosystem/discordjs.mdx
+node_modules/
+.env.local
