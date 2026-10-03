@@ -1,0 +1,6 @@
+import { AssetCrossOriginConfig, RouterManagedTag } from '@tanstack/router-core';
+/**
+ * Build the list of head/link/meta/script tags to render for active matches.
+ * Used internally by `HeadContent`.
+ */
+export declare const useTags: (assetCrossOrigin?: AssetCrossOriginConfig) => RouterManagedTag[];

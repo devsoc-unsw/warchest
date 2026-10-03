@@ -1,9 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/purchase-requests/new')({
-  component: RouteComponent,
+    component: RouteComponent,
 })
 
 function RouteComponent() {
-  return <div>Hello "/purchase-requests/new"!</div>
+    return (
+        <main>
+            <h1>Create Purchase Request</h1>
+        </main>
+    )
 }
+

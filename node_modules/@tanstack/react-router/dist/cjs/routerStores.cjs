@@ -1,0 +1,20 @@
+let _tanstack_router_core = require("@tanstack/router-core");
+let _tanstack_react_store = require("@tanstack/react-store");
+let _tanstack_router_core_isServer = require("@tanstack/router-core/isServer");
+//#region src/routerStores.ts
+var getStoreFactory = (opts) => {
+	if (_tanstack_router_core_isServer.isServer ?? opts.isServer) return {
+		createMutableStore: _tanstack_router_core.createNonReactiveMutableStore,
+		createReadonlyStore: _tanstack_router_core.createNonReactiveReadonlyStore,
+		batch: (fn) => fn()
+	};
+	return {
+		createMutableStore: _tanstack_react_store.createAtom,
+		createReadonlyStore: _tanstack_react_store.createAtom,
+		batch: _tanstack_react_store.batch
+	};
+};
+//#endregion
+exports.getStoreFactory = getStoreFactory;
+
+//# sourceMappingURL=routerStores.cjs.map

@@ -1,0 +1,29 @@
+import { DehydratedMatch } from './types.cjs';
+import { AnyRouter } from '../router.cjs';
+import { AnyRouteMatch } from '../Matches.cjs';
+import { ManifestRouteAssets, ServerManifest } from '../manifest.cjs';
+export declare function dehydrateMatch(match: AnyRouteMatch): DehydratedMatch;
+export declare function attachRouterServerSsrUtils({ router, manifest, getRequestAssets, }: {
+    router: AnyRouter;
+    manifest: ServerManifest | undefined;
+    getRequestAssets?: () => ManifestRouteAssets | undefined;
+}): void;
+/**
+ * Get the origin for the request.
+ *
+ * SECURITY: We intentionally do NOT trust the Origin header for determining
+ * the router's origin. The Origin header can be spoofed by attackers, which
+ * could lead to SSRF-like vulnerabilities where redirects are constructed
+ * using a malicious origin (CVE-2024-34351).
+ *
+ * Instead, we derive the origin from request.url, which is typically set by
+ * the server infrastructure (not client-controlled headers).
+ *
+ * For applications behind proxies that need to trust forwarded headers,
+ * use the router's `origin` option to explicitly configure a trusted origin.
+ */
+export declare function getOrigin(request: Request): string;
+export declare function getNormalizedURL(url: string | URL, base?: string | URL): {
+    url: URL;
+    handledProtocolRelativeURL: boolean;
+};
