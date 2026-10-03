@@ -1,6 +1,3 @@
 # Dingo
 /.dmap
 /build
-node_modules/bun-types/docs/guides/ecosystem/discordjs.mdx
-#node_modules/
-#.env.local
