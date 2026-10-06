@@ -1,4 +1,4 @@
--- name: getPR (one)
+-- name: getPR :one
 SELECT * FROM purchase_requests
 WHERE id = $1 LIMIT 1;
 
