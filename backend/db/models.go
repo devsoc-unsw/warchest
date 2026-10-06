@@ -54,6 +54,50 @@ func (ns NullEventStatus) Value() (driver.Value, error) {
 	return string(ns.EventStatus), nil
 }
 
+type PurchaseRequestStatus string
+
+const (
+	PurchaseRequestStatusDraft    PurchaseRequestStatus = "draft"
+	PurchaseRequestStatusPending  PurchaseRequestStatus = "pending"
+	PurchaseRequestStatusApproved PurchaseRequestStatus = "approved"
+	PurchaseRequestStatusRejected PurchaseRequestStatus = "rejected"
+)
+
+func (e *PurchaseRequestStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PurchaseRequestStatus(s)
+	case string:
+		*e = PurchaseRequestStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PurchaseRequestStatus: %T", src)
+	}
+	return nil
+}
+
+type NullPurchaseRequestStatus struct {
+	PurchaseRequestStatus PurchaseRequestStatus
+	Valid                 bool // Valid is true if PurchaseRequestStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPurchaseRequestStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.PurchaseRequestStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PurchaseRequestStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPurchaseRequestStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PurchaseRequestStatus), nil
+}
+
 type Event struct {
 	ID          pgtype.UUID
 	UserID      pgtype.Int8
@@ -67,6 +111,20 @@ type Event struct {
 	CreatedBy   pgtype.UUID
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
+}
+
+type PurchaseRequest struct {
+	ID              int64
+	CreatedByUserID int64
+	EventID         pgtype.Int8
+	PortfolioID     pgtype.Int8
+	Title           string
+	Description     pgtype.Text
+	ExpectedBudget  pgtype.Int8
+	ActualBudget    pgtype.Int8
+	Status          PurchaseRequestStatus
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
 }
 
 type User struct {

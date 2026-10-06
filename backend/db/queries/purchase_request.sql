@@ -23,6 +23,6 @@ WHERE id = $1
 RETURNING *;
 
 
--- name: DeletePR :
+-- name: DeletePR :exec
 DELETE FROM purchase_requests
 WHERE id = $1;
