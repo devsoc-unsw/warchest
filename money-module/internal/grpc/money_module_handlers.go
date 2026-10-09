@@ -8,23 +8,39 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	pb "warchest/protos/mm_pb"
+	"money-module/internal/service"
 )
 
 type MoneyModuleHandler struct {
 	pb.UnimplementedMoneyModuleServer
+	Svc *service.MoneyModuleService
 }
 
 func NewMoneyModuleHandler() *MoneyModuleHandler {
 	return &MoneyModuleHandler{}
 }
 
-// Metadata only routes
 func (h *MoneyModuleHandler) CreateAccount(
 	ctx context.Context,
 	req *pb.CreateAccountRequest,
 ) (*pb.WalletDetailsResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method CreateAccount not implemented")
+	if req.GetOwnerId().String() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id cannot be empty")
+	}
+	uuid := [16]byte(req.GetOwnerId().Value)	
+	// forward to service layer
+	err := h.Svc.CreateAccount(ctx, uuid, req.BudgetName, req.OwnerType.String())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "User already exists")
+	}
+
+	out := &pb.WalletDetailsResponse {
+		OwnerType: pb.OwnerType_USER,
+		OwnerId: req.OwnerId,
+		WalletType: pb.WalletType_ACCOUNT,
+		WalletName: req.BudgetName,
+	}
+	return out, nil 
 }
 
 func (h *MoneyModuleHandler) ReadAccount(
