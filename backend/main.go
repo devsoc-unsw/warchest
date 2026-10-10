@@ -29,11 +29,12 @@ func initLogger() {
 }
 
 func main() {
+	initLogghoer()
 	// database conn
 	connStr := "postgres://postgres:password@localhost:5432/warchest?sslmode=disable"
 	pool, err := pgxpool.New(context.Background(), connStr)
 	if err != nil {
-		log.Fatalf("failed to connect db: %v", err)
+		// log.Fatalf("failed to connect db: %v", err)
 		slog.Error("failed to connect db: %v", "err msg", err)
 	}
 	defer pool.Close()
@@ -49,7 +50,12 @@ func main() {
 	if err := router.Run(":8080"); err != nil {
 		panic(err)
 	}	
-	initLogger()
+
 	slog.Info("meow", "id", 100)
 }
 
+
+
+// Todo:
+// - logging for opening ports
+// - create context package
