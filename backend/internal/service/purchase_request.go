@@ -8,8 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// define purchaseRequestService, what event can do
-// create interface for testing
 type PurchaseRequestService interface {
 	CreatePR(
 		ctx context.Context,
@@ -21,12 +19,9 @@ type PurchaseRequestService interface {
 		expectedBudget *int64,
 		actualBudget *int64,
 	) (db.PurchaseRequest, error)
-	//updatePR
-	//deletePR
 }
 
-// create purchaseRequest Service struct and add function to it
-type purchaseRequestImpl struct {
+type purchaseRequestServiceImpl struct {
 	repo repository.PurchaseRequestRepository
 }
 
@@ -35,6 +30,7 @@ func NewPurchaseRequestService(
 ) PurchaseRequestService {
 	return &purchaseRequestServiceImpl{repo: repo}
 }
+
 func (s *purchaseRequestServiceImpl) CreatePR(
 	ctx context.Context,
 	createdByUserID int64,
@@ -45,32 +41,37 @@ func (s *purchaseRequestServiceImpl) CreatePR(
 	expectedBudget *int64,
 	actualBudget *int64,
 ) (db.PurchaseRequest, error) {
-	//validation
+
+	// validation
 	if createdByUserID <= 0 {
 		return db.PurchaseRequest{}, errors.New("created by user ID is required")
 	}
+
 	if title == "" {
 		return db.PurchaseRequest{}, errors.New("title is required")
 	}
-	// exactly one (event or profolio) must be provided
+
+	// exactly one must be provided
 	if (eventID == nil && portfolioID == nil) ||
 		(eventID != nil && portfolioID != nil) {
 		return db.PurchaseRequest{}, errors.New(
 			"exactly one of event ID or portfolio ID must be provided",
 		)
 	}
+
 	if expectedBudget != nil && *expectedBudget < 0 {
 		return db.PurchaseRequest{}, errors.New(
 			"expected budget cannot be negative",
 		)
 	}
+
 	if actualBudget != nil && *actualBudget < 0 {
 		return db.PurchaseRequest{}, errors.New(
 			"actual budget cannot be negative",
 		)
 	}
-	// convert nullable values to pgtype
 
+	// convert nullable values to pgtype
 	var eventIDPG pgtype.Int8
 	if eventID != nil {
 		eventIDPG = pgtype.Int8{
