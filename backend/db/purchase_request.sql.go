@@ -67,6 +67,30 @@ func (q *Queries) DeletePR(ctx context.Context, id int64) error {
 	return err
 }
 
+const getPR = `-- name: GetPR :one
+SELECT id, created_by_user_id, event_id, portfolio_id, title, description, expected_budget, actual_budget, status, created_at, updated_at FROM purchase_requests
+WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetPR(ctx context.Context, id int64) (PurchaseRequest, error) {
+	row := q.db.QueryRow(ctx, getPR, id)
+	var i PurchaseRequest
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedByUserID,
+		&i.EventID,
+		&i.PortfolioID,
+		&i.Title,
+		&i.Description,
+		&i.ExpectedBudget,
+		&i.ActualBudget,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listPR = `-- name: ListPR :many
 SELECT id, created_by_user_id, event_id, portfolio_id, title, description, expected_budget, actual_budget, status, created_at, updated_at FROM purchase_requests
 ORDER BY id
@@ -126,30 +150,6 @@ type UpdatePRParams struct {
 
 func (q *Queries) UpdatePR(ctx context.Context, arg UpdatePRParams) (PurchaseRequest, error) {
 	row := q.db.QueryRow(ctx, updatePR, arg.ID, arg.ExpectedBudget, arg.ActualBudget)
-	var i PurchaseRequest
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedByUserID,
-		&i.EventID,
-		&i.PortfolioID,
-		&i.Title,
-		&i.Description,
-		&i.ExpectedBudget,
-		&i.ActualBudget,
-		&i.Status,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getPR = `-- name: getPR :one
-SELECT id, created_by_user_id, event_id, portfolio_id, title, description, expected_budget, actual_budget, status, created_at, updated_at FROM purchase_requests
-WHERE id = $1 LIMIT 1
-`
-
-func (q *Queries) getPR(ctx context.Context, id int64) (PurchaseRequest, error) {
-	row := q.db.QueryRow(ctx, getPR, id)
 	var i PurchaseRequest
 	err := row.Scan(
 		&i.ID,
