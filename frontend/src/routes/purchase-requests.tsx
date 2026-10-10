@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 
 
-//inspect users' all draft purchase requests
+// inspect users' all draft purchase requests
 export const Route = createFileRoute('/purchase-requests')({
     component: PurchaseRequestsPage,
 })
