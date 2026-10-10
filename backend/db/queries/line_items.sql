@@ -52,6 +52,9 @@ SET
 WHERE id = $1
 RETURNING *;
 
--- name: DeleteLineItem :exec
-DELETE FROM line_items
+-- name: ArchiveLineItem :exec
+UPDATE line_items
+SET 
+    is_active = FALSE,
+    updated_at = NOW()
 WHERE id = $1;

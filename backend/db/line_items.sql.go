@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const archiveLineItem = `-- name: ArchiveLineItem :exec
+UPDATE line_items
+SET 
+    is_active = FALSE,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) ArchiveLineItem(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, archiveLineItem, id)
+	return err
+}
+
 const createLineItem = `-- name: CreateLineItem :one
 INSERT INTO line_items (
     estimated_quantity, 
@@ -60,16 +73,6 @@ func (q *Queries) CreateLineItem(ctx context.Context, arg CreateLineItemParams) 
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const deleteLineItem = `-- name: DeleteLineItem :exec
-DELETE FROM line_items
-WHERE id = $1
-`
-
-func (q *Queries) DeleteLineItem(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteLineItem, id)
-	return err
 }
 
 const getLineItemByID = `-- name: GetLineItemByID :one
