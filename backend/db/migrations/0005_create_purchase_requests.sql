@@ -30,7 +30,7 @@ CREATE TABLE purchase_requests (
         NOT NULL
         DEFAULT NOW(),
         
-    -- exatly ONE must exist:
+    -- exactly ONE must exist:
     -- event_id OR portfolio_id
     CHECK (
         (event_id IS NOT NULL AND portfolio_id IS NULL)
@@ -45,4 +45,4 @@ CREATE TABLE purchase_requests (
 
 -- +goose Down
 DROP TABLE purchase_requests;
-DROP TABLE purchase_request_status;
+DROP TYPE purchase_request_status;
