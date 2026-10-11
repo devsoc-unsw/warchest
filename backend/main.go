@@ -6,7 +6,16 @@ import (
 	// "context"
 	// "log"
 
-	// "github.com/gin-gonic/gin"
+	"backend/db"
+	"backend/internal/wire"
+	"backend/internal/middleware"
+	"context"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
 	// "github.com/jackc/pgx/v5/pgxpool"
 	// swaggerFiles "github.com/swaggo/files"
 	// ginSwagger "github.com/swaggo/gin-swagger"
@@ -29,7 +38,7 @@ func initLogger() {
 }
 
 func main() {
-	initLogghoer()
+	initLogger()
 	// database conn
 	connStr := "postgres://postgres:password@localhost:5432/warchest?sslmode=disable"
 	pool, err := pgxpool.New(context.Background(), connStr)
@@ -42,6 +51,7 @@ func main() {
 	queries := db.New(pool)
 	// Gin HTTP router
 	router := gin.Default()
+	router.Use(middleware.Req_logger()) // we can add more fn for middleware after Req_logger
 
 	// each module wires it own
 	wire.WireEvent(queries, router)
