@@ -12,12 +12,12 @@ interface Warchest {
 
 export default function LandingPage() {
   const [text, setText] = useState("");
-  const [warchests, setWarchests] = useState<Warchest[]>([]);
+  const [warchests, setWarchests] = useState<Array<Warchest>>([]);
   const navigate = useNavigate();
 
   function handleChange(change: string) {
     if (change.length > text.length) {
-      for (var i = 0; i < (change.length - text.length); i++) {
+      for (let i = 0; i < (change.length - text.length); i++) {
         const newWarchest: Warchest = {
           id: crypto.randomUUID(),
           x: Math.random() * 100,
@@ -99,7 +99,7 @@ export default function LandingPage() {
               fontSize: '18px',
               borderRadius: '8px',
               border: '1px solid #ccc',
-              background: 'rgba(0,0,0,0)',
+              background: 'rgba(255,255,255,1)',
               width: '300px',
               boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
             }}
