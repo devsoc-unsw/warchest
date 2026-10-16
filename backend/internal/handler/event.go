@@ -5,8 +5,6 @@ package handler
 import (
 	"backend/db"
 	"backend/internal/service"
-	"encoding/json"
-	"io"
 	"net/http"
 	"time"
 
@@ -29,27 +27,18 @@ type createEventRequest struct {
 	Description string         `json:"description"`
 	SocietyID   string         `json:"society_id"`
 	Status      db.EventStatus `json:"status"`
-	// Temporary legacy input: replace with authenticated identity before enabling member access.
+	// Temporary input: use authenticated identity before enabling member access.
 	CreatedBy string `json:"created_by"`
 }
 
-// read json, use EventService, return http code
-// parses the JSON request body into req
+// Read the frontend JSON, create the Event, and return the result.
 func (h *EventHandler) CreateEvent(c *gin.Context) {
-	// declares a variable req createEventRequest
 	var req createEventRequest
 
-	decoder := json.NewDecoder(c.Request.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "request body must contain one JSON object"})
-		return
-	}
-	// := declare and assign
 	event, err := h.service.CreateEvent(c.Request.Context(), service.CreateEventInput{
 		Name:        req.Name,
 		EventTime:   req.EventTime,
@@ -60,12 +49,25 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		Status:      req.Status,
 	})
 
-	// check err
 	if err != nil {
-		// convert error type into a string
+		if err == service.ErrCreateEvent {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// return 201, and created data.
-	c.JSON(http.StatusCreated, event)
+	c.JSON(http.StatusCreated, gin.H{
+		"id":          event.ID.String(),
+		"type":        event.Type,
+		"event_name":  event.Name,
+		"society_id":  event.SocietyID,
+		"status":      event.Status.EventStatus,
+		"created_by":  event.CreatedBy.String(),
+		"event_time":  event.EventTime,
+		"location":    event.Location,
+		"description": event.Description,
+		"created_at":  event.CreatedAt.Time,
+		"updated_at":  event.UpdatedAt.Time,
+	})
 }
