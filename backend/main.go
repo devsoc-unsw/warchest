@@ -28,7 +28,11 @@ func main() {
 	// each module wires it own
 	wire.WireEvent(queries, router)
 
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	router.StaticFile("/openapi.yaml", "openapi.yaml")
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(
+		swaggerFiles.Handler,
+		ginSwagger.URL("/openapi.yaml"),
+	))
 	if err := router.Run(":8080"); err != nil {
 		panic(err)
 	}
