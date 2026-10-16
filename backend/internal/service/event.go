@@ -1,5 +1,3 @@
-// business logic and validation
-
 package service
 
 import (
@@ -7,29 +5,27 @@ import (
 	"backend/internal/repository"
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// define EventService, what event can do
-// create interface for testing
-type EventService interface {
-	CreateEvent(
-		ctx context.Context,
-		name string,
-		eventTime time.Time,
-		budget int64,
-		status db.EventStatus,
-		location string,
-		description string,
-		societyID string,
-		createdBy string,
-	) (db.Event, error)
-	// add more... delete/update...
+// CreateEventInput contains Warchest metadata only. Money Module owns amounts.
+type CreateEventInput struct {
+	Name        string
+	EventTime   time.Time
+	Location    string
+	Description string
+	SocietyID   string
+	CreatedBy   string
+	Status      db.EventStatus
 }
 
-// create eventservice struct and add func to it
+type EventService interface {
+	CreateEvent(ctx context.Context, input CreateEventInput) (db.Budget, error)
+}
+
 type eventServiceImpl struct {
 	repo repository.EventRepository
 }
@@ -38,54 +34,33 @@ func NewEventService(repo repository.EventRepository) EventService {
 	return &eventServiceImpl{repo: repo}
 }
 
-func (s *eventServiceImpl) CreateEvent(
-	ctx context.Context,
-	name string,
-	eventTime time.Time,
-	budget int64,
-	status db.EventStatus,
-	location string,
-	description string,
-	societyID string,
-	createdBy string,
-) (db.Event, error) {
-	// logic and validation
-	// TODO: auth check
-
-	// event_name cannot be empty
+func (s *eventServiceImpl) CreateEvent(ctx context.Context, input CreateEventInput) (db.Budget, error) {
+	// TODO(auth): authenticate the caller and authorise creation within this society.
+	// TODO(auth): apply Event/Portfolio RBAC rules in business validation
+	// TODO: validate type-specific fields and lifecycle rules in their service operations.
+	// TODO(Money Module): confirm creation and Budget linking requirements with the Money Module contract.
+	if input.Status != db.EventStatusDRAFT && input.Status != db.EventStatusINPROGRESS {
+		return db.Budget{}, errors.New("status must be DRAFT or IN_PROGRESS")
+	}
+	name := strings.TrimSpace(input.Name)
 	if name == "" {
-		return db.Event{}, errors.New("event name is required")
+		return db.Budget{}, errors.New("event name is required")
 	}
-	// budget cannot be negative
-	if budget < 0 {
-		return db.Event{}, errors.New("budget could not be negative")
+	if strings.TrimSpace(input.SocietyID) == "" {
+		return db.Budget{}, errors.New("society ID is required")
 	}
-	// convert plain types into pgtype
-	// convert time.Time to pytype.Timestamptz
-	eventTimePG := pgtype.Timestamptz{Time: eventTime, Valid: true}
-	// convert string to Text
-	locationPG := pgtype.Text{String: location, Valid: true}
-	descriptionPG := pgtype.Text{String: description, Valid: description != ""}
-	// convert societyID string to UUID
-	var societyIDPG pgtype.UUID
-	if err := societyIDPG.Scan(societyID); err != nil {
-		return db.Event{}, errors.New("invalid society ID")
+	var creator pgtype.UUID
+	if err := creator.Scan(input.CreatedBy); err != nil || !creator.Valid || creator.Bytes == [16]byte{} {
+		return db.Budget{}, errors.New("invalid created by ID")
 	}
-	// convert createdBy string to UUID
-	var createdByPG pgtype.UUID
-	if err := createdByPG.Scan(createdBy); err != nil {
-		return db.Event{}, errors.New("invalid created by ID")
-	}
-	params := db.CreateEventParams{
-		EventName:   name,
-		EventTime:   eventTimePG,
-		Budget:      budget,
-		Status:      status,
-		Location:    locationPG,
-		Description: descriptionPG,
-		SocietyID:   societyIDPG,
-		CreatedBy:   createdByPG,
-	}
-	// create the event
-	return s.repo.CreateEvent(ctx, params)
+	// The frontend sends DRAFT for Create Draft and IN_PROGRESS for Create.
+	return s.repo.CreateEvent(ctx, db.CreateEventParams{
+		Name:        name,
+		SocietyID:   input.SocietyID,
+		CreatedBy:   creator,
+		Status:      db.NullEventStatus{EventStatus: input.Status, Valid: true},
+		EventTime:   pgtype.Timestamptz{Time: input.EventTime, Valid: !input.EventTime.IsZero()},
+		Location:    pgtype.Text{String: input.Location, Valid: input.Location != ""},
+		Description: pgtype.Text{String: input.Description, Valid: input.Description != ""},
+	})
 }

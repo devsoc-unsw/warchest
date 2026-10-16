@@ -5,6 +5,8 @@ package handler
 import (
 	"backend/db"
 	"backend/internal/service"
+	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -23,12 +25,12 @@ func NewEventHandler(service service.EventService) *EventHandler {
 type createEventRequest struct {
 	Name        string         `json:"event_name"`
 	EventTime   time.Time      `json:"event_time"`
-	Budget      int64          `json:"budget"`
-	Status      db.EventStatus `json:"status"`
 	Location    string         `json:"location"`
 	Description string         `json:"description"`
 	SocietyID   string         `json:"society_id"`
-	CreatedBy   string         `json:"created_by"`
+	Status      db.EventStatus `json:"status"`
+	// Temporary legacy input: replace with authenticated identity before enabling member access.
+	CreatedBy string `json:"created_by"`
 }
 
 // read json, use EventService, return http code
@@ -37,22 +39,26 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 	// declares a variable req createEventRequest
 	var req createEventRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "request body must contain one JSON object"})
+		return
+	}
 	// := declare and assign
-	event, err := h.service.CreateEvent(
-		c.Request.Context(), // read context from http request
-		req.Name,
-		req.EventTime,
-		req.Budget,
-		req.Status,
-		req.Location,
-		req.Description,
-		req.SocietyID,
-		req.CreatedBy,
-	)
+	event, err := h.service.CreateEvent(c.Request.Context(), service.CreateEventInput{
+		Name:        req.Name,
+		EventTime:   req.EventTime,
+		Location:    req.Location,
+		Description: req.Description,
+		SocietyID:   req.SocietyID,
+		CreatedBy:   req.CreatedBy,
+		Status:      req.Status,
+	})
 
 	// check err
 	if err != nil {

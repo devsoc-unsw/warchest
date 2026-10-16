@@ -1,5 +1,10 @@
 # Warchest
 
+## Domain documentation
+
+- [Budgets, Events and Portfolios](docs/budgets.md): definitions, schema, ownership,
+  Event states, Portfolio reset and integration boundaries.
+
 ## Development
 ### Starting development
 1. Start all services and prepare a dev container (app, money-module, Postgres, TigerBeetle):
