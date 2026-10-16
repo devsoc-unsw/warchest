@@ -38,7 +38,7 @@ For example, Marketing may fund Starlight without Starlight becoming part of Mar
 
 ## 3. Database Design
 
-One table stores both types:
+The `budgets` table stores both types. Portfolio annual records are stored separately in `portfolio_years`.
 
 ```text
 budgets
@@ -72,6 +72,18 @@ budgets
 | `location` | Optional | Not used |
 | `status` | Required | Not used |
 | `created_by UUID` | Required | Not used for system imports |
+
+### Portfolio annual records
+
+| Field | Purpose |
+|---|---|
+| `society_id TEXT` | Society containing the Portfolio |
+| `team_id TEXT` | Portfolio's AMBUSH Team ID |
+| `year INTEGER` | Year the records belong to |
+| `archived_at` | When this year's records were archived; empty for an unarchived year |
+
+`society_id`, `team_id` and `year` together identify an annual record. There is no `budget_id` column here; the existing `budgets.id` stays unchanged.
+Annual archival uses `portfolio_years.archived_at`, without hiding the Portfolio itself through `budgets.archived_at`.
 
 ## 4. Events
 
@@ -145,4 +157,7 @@ After reset:              $1,000
 ```
 
 - Reset keeps the same Warchest Portfolio ID and `team_id`.
+- The previous year's records are archived and kept for reference; a new annual record is created for the new year.
+- Portfolio reset does not affect independent Events.
 - Money Module owns the allowance, reset operation, history and safe retry behaviour.
+- TODO: implement reset and associate Purchase Requests with their Portfolio year. Adding the annual table alone does not archive request records.

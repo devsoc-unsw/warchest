@@ -84,6 +84,11 @@ paths:
 
         There is no default status. CLOSED is not allowed during creation.
         Event time, location and description are optional for both buttons.
+        Budget may be omitted or null for DRAFT, but must be an integer for
+        IN_PROGRESS. Missing budget does not automatically change the status.
+        
+        TODO(Money Module): confirm amount units and save the supplied budget.
+        The current backend validates its presence but does not save the amount.
 
         created_by is a temporary request field matching the current backend.
         TODO(auth): obtain this user ID from verified authentication instead.
@@ -101,6 +106,7 @@ paths:
                   society_id: society-123
                   created_by: 277c2d81-0fb2-4c9e-8480-a6ed872b3f46
                   status: IN_PROGRESS
+                  budget: 1000
                   event_time: '2026-11-01T18:00:00+11:00'
                   location: UNSW
                   description: Society welcome event
@@ -122,6 +128,7 @@ paths:
           description: |
             Invalid JSON or input. The name and society ID must not be blank,
             created_by must be a UUID, and status must be DRAFT or IN_PROGRESS.
+            IN_PROGRESS also requires a non-negative integer budget.
           content:
             application/json:
               schema:
@@ -160,6 +167,15 @@ components:
           type: string
           enum: [DRAFT, IN_PROGRESS]
           description: Selected by the frontend button. Required; no default.
+        budget:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: |
+            Unsigned 64-bit integer input. Decimal and negative values are rejected.
+            Optional for DRAFT; required and non-null for IN_PROGRESS.
+            Validated as input only; the amount is not currently saved.
+            TODO: confirm amount units and whether zero is allowed by business rules.
         event_time:
           type: string
           format: date-time

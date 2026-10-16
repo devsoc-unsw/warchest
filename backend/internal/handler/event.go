@@ -27,7 +27,8 @@ type createEventRequest struct {
 	Description string         `json:"description"`
 	SocietyID   string         `json:"society_id"`
 	Status      db.EventStatus `json:"status"`
-	// Temporary input: use authenticated identity before enabling member access.
+	Budget      *uint64        `json:"budget"`
+
 	CreatedBy string `json:"created_by"`
 }
 
@@ -47,6 +48,7 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		SocietyID:   req.SocietyID,
 		CreatedBy:   req.CreatedBy,
 		Status:      req.Status,
+		Budget:      req.Budget,
 	})
 
 	if err != nil {

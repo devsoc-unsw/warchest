@@ -112,3 +112,10 @@ type Budget struct {
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
 }
+
+type PortfolioYear struct {
+	SocietyID  string
+	TeamID     string
+	Year       int32
+	ArchivedAt pgtype.Timestamptz
+}

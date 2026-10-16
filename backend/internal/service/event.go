@@ -15,7 +15,7 @@ import (
 // Used by the handler to distinguish a database failure from invalid input.
 var ErrCreateEvent = errors.New("failed to create event")
 
-// CreateEventInput contains Warchest metadata only. Money Module owns amounts.
+// Budget is input only. Money Module owns monetary storage.
 type CreateEventInput struct {
 	Name        string
 	EventTime   time.Time
@@ -24,6 +24,7 @@ type CreateEventInput struct {
 	SocietyID   string
 	CreatedBy   string
 	Status      db.EventStatus
+	Budget      *uint64
 }
 
 type EventService interface {
@@ -50,6 +51,9 @@ func (s *eventServiceImpl) CreateEvent(
 	if input.Status != db.EventStatusDRAFT && input.Status != db.EventStatusINPROGRESS {
 		return db.Budget{}, errors.New("status must be DRAFT or IN_PROGRESS")
 	}
+	if input.Status == db.EventStatusINPROGRESS && input.Budget == nil {
+		return db.Budget{}, errors.New("budget is required for IN_PROGRESS")
+	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return db.Budget{}, errors.New("event name is required")
@@ -63,6 +67,7 @@ func (s *eventServiceImpl) CreateEvent(
 		return db.Budget{}, errors.New("invalid created by ID")
 	}
 	// The frontend sends DRAFT for Create Draft and IN_PROGRESS for Create.
+	// TODO(Money Module): save input.Budget after its API and amount unit are agreed.
 	params := db.CreateEventParams{
 		Name:      name,
 		SocietyID: societyID,
