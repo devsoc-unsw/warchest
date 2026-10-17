@@ -1,4 +1,4 @@
-package lineitem
+package service
 
 import (
 	"context"
@@ -8,27 +8,28 @@ import (
 	"testing"
 
 	"backend/db"
+	"backend/internal/repository"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// fakeRepo is an in-memory Repository. It reproduces the two behaviours of the
+// fakeLineItemRepo is an in-memory Repository. It reproduces the two behaviours of the
 // real schema the service depends on: the column defaults applied on insert
 // (pr_draft, is_active true), and the is_active filter on the list queries.
-type fakeRepo struct {
+type fakeLineItemRepo struct {
 	items  map[int64]db.LineItem
 	nextID int64
 	err    error // when set, every method fails with it
 }
 
-var _ Repository = (*fakeRepo)(nil)
+var _ repository.LineItemRepository = (*fakeLineItemRepo)(nil)
 
-func newFakeRepo() *fakeRepo {
-	return &fakeRepo{items: map[int64]db.LineItem{}, nextID: 1}
+func newFakeLineItemRepo() *fakeLineItemRepo {
+	return &fakeLineItemRepo{items: map[int64]db.LineItem{}, nextID: 1}
 }
 
-func (f *fakeRepo) seed(items ...db.LineItem) {
+func (f *fakeLineItemRepo) seed(items ...db.LineItem) {
 	for _, item := range items {
 		f.items[item.ID] = item
 		if item.ID >= f.nextID {
@@ -37,7 +38,7 @@ func (f *fakeRepo) seed(items ...db.LineItem) {
 	}
 }
 
-func (f *fakeRepo) sorted(match func(db.LineItem) bool) []db.LineItem {
+func (f *fakeLineItemRepo) sorted(match func(db.LineItem) bool) []db.LineItem {
 	var out []db.LineItem
 	for _, item := range f.items {
 		if match(item) {
@@ -48,7 +49,7 @@ func (f *fakeRepo) sorted(match func(db.LineItem) bool) []db.LineItem {
 	return out
 }
 
-func (f *fakeRepo) CreateLineItem(
+func (f *fakeLineItemRepo) CreateLineItem(
 	_ context.Context,
 	arg db.CreateLineItemParams,
 ) (db.LineItem, error) {
@@ -70,7 +71,7 @@ func (f *fakeRepo) CreateLineItem(
 	return item, nil
 }
 
-func (f *fakeRepo) GetLineItemByID(
+func (f *fakeLineItemRepo) GetLineItemByID(
 	_ context.Context,
 	id int64,
 ) (db.LineItem, error) {
@@ -84,7 +85,7 @@ func (f *fakeRepo) GetLineItemByID(
 	return item, nil
 }
 
-func (f *fakeRepo) GetLineItemsByPRID(
+func (f *fakeLineItemRepo) GetLineItemsByPRID(
 	_ context.Context,
 	prID int64,
 ) ([]db.LineItem, error) {
@@ -96,7 +97,7 @@ func (f *fakeRepo) GetLineItemsByPRID(
 	}), nil
 }
 
-func (f *fakeRepo) GetLineItemsByReimbID(
+func (f *fakeLineItemRepo) GetLineItemsByReimbID(
 	_ context.Context,
 	reimbID pgtype.Int8,
 ) ([]db.LineItem, error) {
@@ -109,7 +110,7 @@ func (f *fakeRepo) GetLineItemsByReimbID(
 	}), nil
 }
 
-func (f *fakeRepo) ListLineItems(
+func (f *fakeLineItemRepo) ListLineItems(
 	_ context.Context,
 	limit int32,
 ) ([]db.LineItem, error) {
@@ -123,7 +124,7 @@ func (f *fakeRepo) ListLineItems(
 	return all, nil
 }
 
-func (f *fakeRepo) UpdateLineItem(
+func (f *fakeLineItemRepo) UpdateLineItem(
 	_ context.Context,
 	arg db.UpdateLineItemParams,
 ) (db.LineItem, error) {
@@ -149,18 +150,21 @@ func (f *fakeRepo) UpdateLineItem(
 	return item, nil
 }
 
-func (f *fakeRepo) DeleteLineItem(_ context.Context, id int64) error {
+func (f *fakeLineItemRepo) ArchiveLineItem(_ context.Context, id int64) error {
 	if f.err != nil {
 		return f.err
 	}
-	delete(f.items, id)
+	if item, ok := f.items[id]; ok {
+		item.IsActive = false
+		f.items[id] = item
+	}
 	return nil
 }
 
 func i8(v int64) pgtype.Int8 { return pgtype.Int8{Int64: v, Valid: true} }
 
-func validCreate() CreateInput {
-	return CreateInput{
+func validCreate() CreateLineItemInput {
+	return CreateLineItemInput{
 		PurchaseRequestID:    7,
 		EstimatedQuantity:    2,
 		EstimatedCostPerItem: 1000,
@@ -170,7 +174,7 @@ func validCreate() CreateInput {
 }
 
 func TestCreateAppliesColumnDefaults(t *testing.T) {
-	svc := NewService(newFakeRepo())
+	svc := NewLineItemService(newFakeLineItemRepo())
 
 	item, err := svc.Create(context.Background(), validCreate())
 	if err != nil {
@@ -185,7 +189,7 @@ func TestCreateAppliesColumnDefaults(t *testing.T) {
 }
 
 func TestCreateStoresSuppliedValues(t *testing.T) {
-	svc := NewService(newFakeRepo())
+	svc := NewLineItemService(newFakeLineItemRepo())
 	in := validCreate()
 
 	item, err := svc.Create(context.Background(), in)
@@ -208,7 +212,7 @@ func TestCreateStoresSuppliedValues(t *testing.T) {
 // An absent description is stored as NULL rather than as an empty string, so
 // "no description" has one representation instead of two.
 func TestCreateTreatsEmptyDescriptionAsNull(t *testing.T) {
-	svc := NewService(newFakeRepo())
+	svc := NewLineItemService(newFakeLineItemRepo())
 	in := validCreate()
 	in.Description = ""
 
@@ -222,32 +226,43 @@ func TestCreateTreatsEmptyDescriptionAsNull(t *testing.T) {
 }
 
 func TestCreateValidation(t *testing.T) {
-	tests := map[string]func(*CreateInput){
-		"zero purchase request":     func(c *CreateInput) { c.PurchaseRequestID = 0 },
-		"negative purchase request": func(c *CreateInput) { c.PurchaseRequestID = -1 },
-		"zero quantity":             func(c *CreateInput) { c.EstimatedQuantity = 0 },
-		"negative quantity":         func(c *CreateInput) { c.EstimatedQuantity = -3 },
-		"negative unit cost":        func(c *CreateInput) { c.EstimatedUnitCost = -1 },
-		"negative cost per item": func(c *CreateInput) {
+	tests := map[string]func(*CreateLineItemInput){
+		"zero purchase request": func(c *CreateLineItemInput) {
+			c.PurchaseRequestID = 0
+		},
+		"negative purchase request": func(c *CreateLineItemInput) {
+			c.PurchaseRequestID = -1
+		},
+		"zero quantity": func(c *CreateLineItemInput) {
+			c.EstimatedQuantity = 0
+		},
+		"negative quantity": func(c *CreateLineItemInput) {
+			c.EstimatedQuantity = -3
+		},
+		"negative unit cost": func(c *CreateLineItemInput) {
+			c.EstimatedUnitCost = -1
+		},
+		"negative cost per item": func(c *CreateLineItemInput) {
 			c.EstimatedCostPerItem = -1
 		},
-		"over long description": func(c *CreateInput) {
-			c.Description = strings.Repeat("x", maxDescriptionLen+1)
+		"over long description": func(c *CreateLineItemInput) {
+			c.Description = strings.Repeat("x", maxLineItemDescriptionLen+1)
 		},
 	}
 
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
-			repo := newFakeRepo()
+			repo := newFakeLineItemRepo()
 			in := validCreate()
 			mutate(&in)
 
-			if _, err := NewService(repo).Create(context.Background(), in); err != nil {
-				if !errors.Is(err, ErrValidation) {
-					t.Fatalf("Create returned %v, want ErrValidation", err)
+			_, err := NewLineItemService(repo).Create(context.Background(), in)
+			if err != nil {
+				if !errors.Is(err, ErrInvalidLineItem) {
+					t.Fatalf("Create returned %v, want ErrInvalidLineItem", err)
 				}
 			} else {
-				t.Fatal("Create returned nil, want ErrValidation")
+				t.Fatal("Create returned nil, want ErrInvalidLineItem")
 			}
 			if len(repo.items) != 0 {
 				t.Errorf("wrote %d rows, want 0", len(repo.items))
@@ -257,7 +272,7 @@ func TestCreateValidation(t *testing.T) {
 }
 
 func TestCreateAcceptsZeroCosts(t *testing.T) {
-	svc := NewService(newFakeRepo())
+	svc := NewLineItemService(newFakeLineItemRepo())
 	in := validCreate()
 	in.EstimatedCostPerItem = 0
 	in.EstimatedUnitCost = 0
@@ -268,11 +283,11 @@ func TestCreateAcceptsZeroCosts(t *testing.T) {
 }
 
 func TestGetByIDMapsMissingRowToErrNotFound(t *testing.T) {
-	svc := NewService(newFakeRepo())
+	svc := NewLineItemService(newFakeLineItemRepo())
 
 	_, err := svc.GetByID(context.Background(), 404)
-	if !errors.Is(err, ErrNotFound) {
-		t.Fatalf("GetByID returned %v, want ErrNotFound", err)
+	if !errors.Is(err, ErrLineItemNotFound) {
+		t.Fatalf("GetByID returned %v, want ErrLineItemNotFound", err)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		t.Error("GetByID leaked pgx.ErrNoRows to the caller")
@@ -280,10 +295,10 @@ func TestGetByIDMapsMissingRowToErrNotFound(t *testing.T) {
 }
 
 func TestGetByIDReturnsItem(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	repo.seed(db.LineItem{ID: 5, PurchaseRequestID: 7, IsActive: true})
 
-	item, err := NewService(repo).GetByID(context.Background(), 5)
+	item, err := NewLineItemService(repo).GetByID(context.Background(), 5)
 	if err != nil {
 		t.Fatalf("GetByID returned %v, want nil", err)
 	}
@@ -293,14 +308,15 @@ func TestGetByIDReturnsItem(t *testing.T) {
 }
 
 func TestListByPurchaseRequestExcludesOtherPRsAndArchived(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	repo.seed(
 		db.LineItem{ID: 1, PurchaseRequestID: 7, IsActive: true},
 		db.LineItem{ID: 2, PurchaseRequestID: 7, IsActive: false},
 		db.LineItem{ID: 3, PurchaseRequestID: 8, IsActive: true},
 	)
 
-	items, err := NewService(repo).ListByPurchaseRequest(context.Background(), 7)
+	items, err := NewLineItemService(repo).
+		ListByPurchaseRequest(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("ListByPurchaseRequest returned %v, want nil", err)
 	}
@@ -310,14 +326,14 @@ func TestListByPurchaseRequestExcludesOtherPRsAndArchived(t *testing.T) {
 }
 
 func TestListByReimbursementRequest(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	repo.seed(
 		db.LineItem{ID: 1, ReimbursementRequestID: i8(42), IsActive: true},
 		db.LineItem{ID: 2, ReimbursementRequestID: i8(99), IsActive: true},
 		db.LineItem{ID: 3, IsActive: true}, // not attached to any reimbursement
 	)
 
-	svc := NewService(repo)
+	svc := NewLineItemService(repo)
 	items, err := svc.ListByReimbursementRequest(context.Background(), 42)
 	if err != nil {
 		t.Fatalf("ListByReimbursementRequest returned %v, want nil", err)
@@ -328,7 +344,7 @@ func TestListByReimbursementRequest(t *testing.T) {
 }
 
 func TestTotalsByPurchaseRequest(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	repo.seed(
 		// 2 x 1000 estimated, 2 x 1100 actual
 		db.LineItem{
@@ -348,7 +364,8 @@ func TestTotalsByPurchaseRequest(t *testing.T) {
 		},
 	)
 
-	totals, err := NewService(repo).TotalsByPurchaseRequest(context.Background(), 7)
+	totals, err := NewLineItemService(repo).
+		TotalsByPurchaseRequest(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("TotalsByPurchaseRequest returned %v, want nil", err)
 	}
@@ -363,14 +380,15 @@ func TestTotalsByPurchaseRequest(t *testing.T) {
 // A line item with a quantity but no cost yet must contribute nothing, rather
 // than contributing zero and understating the real spend.
 func TestTotalsIgnoresPartiallyRecordedActuals(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	repo.seed(db.LineItem{
 		ID: 1, PurchaseRequestID: 7, IsActive: true,
 		EstimatedQuantity: 1, EstimatedCostPerItem: 900,
 		ActualQuantity: i8(5), // cost per item still unset
 	})
 
-	totals, err := NewService(repo).TotalsByPurchaseRequest(context.Background(), 7)
+	totals, err := NewLineItemService(repo).
+		TotalsByPurchaseRequest(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("TotalsByPurchaseRequest returned %v, want nil", err)
 	}
@@ -380,21 +398,21 @@ func TestTotalsIgnoresPartiallyRecordedActuals(t *testing.T) {
 }
 
 func TestTotalsOfEmptyPurchaseRequestIsZero(t *testing.T) {
-	svc := NewService(newFakeRepo())
+	svc := NewLineItemService(newFakeLineItemRepo())
 
 	totals, err := svc.TotalsByPurchaseRequest(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("TotalsByPurchaseRequest returned %v, want nil", err)
 	}
-	if totals != (Totals{}) {
+	if totals != (LineItemTotals{}) {
 		t.Errorf("totals = %+v, want zero", totals)
 	}
 }
 
 func TestReadsPropagateRepositoryErrors(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	repo.err = errors.New("connection refused")
-	svc := NewService(repo)
+	svc := NewLineItemService(repo)
 	ctx := context.Background()
 
 	if _, err := svc.GetByID(ctx, 1); !errors.Is(err, repo.err) {
@@ -410,7 +428,7 @@ func TestReadsPropagateRepositoryErrors(t *testing.T) {
 
 // TestParamsFromRoundTripsEveryColumn is the guarantee the whole phase 4
 // design rests on: because UpdateLineItem writes all twelve columns, a field
-// missing from paramsFrom would be silently zeroed on every update. Writing a
+// missing from lineItemParamsFrom would be silently zeroed on every update. Writing a
 // fully populated row back through it must change nothing.
 func TestParamsFromRoundTripsEveryColumn(t *testing.T) {
 	original := db.LineItem{
@@ -428,10 +446,13 @@ func TestParamsFromRoundTripsEveryColumn(t *testing.T) {
 		Status:                 db.LineItemStatusReimbDraft,
 		IsActive:               true,
 	}
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	repo.seed(original)
 
-	written, err := repo.UpdateLineItem(context.Background(), paramsFrom(original))
+	written, err := repo.UpdateLineItem(
+		context.Background(),
+		lineItemParamsFrom(original),
+	)
 	if err != nil {
 		t.Fatalf("UpdateLineItem returned %v, want nil", err)
 	}
@@ -445,7 +466,7 @@ func pstr(s string) *string { return &s }
 
 // seedItem puts one line item in the given status, so a rule can be exercised
 // from every point in the lifecycle.
-func seedItem(repo *fakeRepo, status db.LineItemStatus) db.LineItem {
+func seedItem(repo *fakeLineItemRepo, status db.LineItemStatus) db.LineItem {
 	item := db.LineItem{
 		ID: 1, PurchaseRequestID: 7, IsActive: true,
 		EstimatedQuantity: 2, EstimatedCostPerItem: 1000, EstimatedUnitCost: 100,
@@ -456,8 +477,8 @@ func seedItem(repo *fakeRepo, status db.LineItemStatus) db.LineItem {
 	return item
 }
 
-func validEstimates() EstimatesInput {
-	return EstimatesInput{
+func validEstimates() LineItemEstimatesInput {
+	return LineItemEstimatesInput{
 		EstimatedQuantity:    5,
 		EstimatedCostPerItem: 200,
 		EstimatedUnitCost:    20,
@@ -466,11 +487,11 @@ func validEstimates() EstimatesInput {
 }
 
 func TestUpdateEstimatesAllowedOnlyInDraft(t *testing.T) {
-	for _, status := range AllStatuses {
+	for _, status := range AllLineItemStatuses {
 		t.Run(string(status), func(t *testing.T) {
-			repo := newFakeRepo()
+			repo := newFakeLineItemRepo()
 			seedItem(repo, status)
-			svc := NewService(repo)
+			svc := NewLineItemService(repo)
 
 			_, err := svc.UpdateEstimates(context.Background(), 1, validEstimates())
 			if status == db.LineItemStatusPrDraft {
@@ -479,20 +500,23 @@ func TestUpdateEstimatesAllowedOnlyInDraft(t *testing.T) {
 				}
 				return
 			}
-			if !errors.Is(err, ErrImmutableField) {
-				t.Fatalf("UpdateEstimates returned %v, want ErrImmutableField", err)
+			if !errors.Is(err, ErrImmutableLineItemField) {
+				t.Fatalf(
+					"UpdateEstimates returned %v, want ErrImmutableLineItemField",
+					err,
+				)
 			}
 		})
 	}
 }
 
 func TestUpdateEstimatesAppliesValuesAndLeavesTheRestAlone(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	seedItem(repo, db.LineItemStatusPrDraft)
 	repo.items[1] = withActuals(repo.items[1])
 
 	in := validEstimates()
-	item, err := NewService(repo).UpdateEstimates(context.Background(), 1, in)
+	item, err := NewLineItemService(repo).UpdateEstimates(context.Background(), 1, in)
 	if err != nil {
 		t.Fatalf("UpdateEstimates returned %v, want nil", err)
 	}
@@ -513,14 +537,14 @@ func TestUpdateEstimatesAppliesValuesAndLeavesTheRestAlone(t *testing.T) {
 }
 
 func TestUpdateEstimatesValidation(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	seedItem(repo, db.LineItemStatusPrDraft)
 	in := validEstimates()
 	in.EstimatedQuantity = 0
 
-	_, err := NewService(repo).UpdateEstimates(context.Background(), 1, in)
-	if !errors.Is(err, ErrValidation) {
-		t.Fatalf("UpdateEstimates returned %v, want ErrValidation", err)
+	_, err := NewLineItemService(repo).UpdateEstimates(context.Background(), 1, in)
+	if !errors.Is(err, ErrInvalidLineItem) {
+		t.Fatalf("UpdateEstimates returned %v, want ErrInvalidLineItem", err)
 	}
 	if repo.items[1].EstimatedQuantity != 2 {
 		t.Error("a rejected update still wrote to the row")
@@ -528,22 +552,26 @@ func TestUpdateEstimatesValidation(t *testing.T) {
 }
 
 func TestUpdateActualsAllowedOnlyInReimbDraft(t *testing.T) {
-	in := ActualsInput{ActualQuantity: p64(3)}
+	in := LineItemActualsInput{ActualQuantity: p64(3)}
 
-	for _, status := range AllStatuses {
+	for _, status := range AllLineItemStatuses {
 		t.Run(string(status), func(t *testing.T) {
-			repo := newFakeRepo()
+			repo := newFakeLineItemRepo()
 			seedItem(repo, status)
 
-			_, err := NewService(repo).UpdateActuals(context.Background(), 1, in)
+			_, err := NewLineItemService(repo).
+				UpdateActuals(context.Background(), 1, in)
 			if status == db.LineItemStatusReimbDraft {
 				if err != nil {
 					t.Fatalf("UpdateActuals returned %v, want nil", err)
 				}
 				return
 			}
-			if !errors.Is(err, ErrImmutableField) {
-				t.Fatalf("UpdateActuals returned %v, want ErrImmutableField", err)
+			if !errors.Is(err, ErrImmutableLineItemField) {
+				t.Fatalf(
+					"UpdateActuals returned %v, want ErrImmutableLineItemField",
+					err,
+				)
 			}
 		})
 	}
@@ -552,12 +580,12 @@ func TestUpdateActualsAllowedOnlyInReimbDraft(t *testing.T) {
 // A reimbursement is filled in as receipts arrive, so an update naming one
 // field must not blank the others.
 func TestUpdateActualsAppliesOnlySuppliedFields(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	seedItem(repo, db.LineItemStatusReimbDraft)
 	repo.items[1] = withActuals(repo.items[1])
 
-	svc := NewService(repo)
-	in := ActualsInput{ActualCostPerItem: p64(1234)}
+	svc := NewLineItemService(repo)
+	in := LineItemActualsInput{ActualCostPerItem: p64(1234)}
 	item, err := svc.UpdateActuals(context.Background(), 1, in)
 	if err != nil {
 		t.Fatalf("UpdateActuals returned %v, want nil", err)
@@ -575,35 +603,36 @@ func TestUpdateActualsAppliesOnlySuppliedFields(t *testing.T) {
 }
 
 func TestUpdateActualsValidation(t *testing.T) {
-	tests := map[string]ActualsInput{
+	tests := map[string]LineItemActualsInput{
 		"zero quantity":          {ActualQuantity: p64(0)},
 		"negative quantity":      {ActualQuantity: p64(-1)},
 		"negative cost per item": {ActualCostPerItem: p64(-1)},
 		"negative unit cost":     {ActualUnitCost: p64(-1)},
 		"over long description": {
-			Description: pstr(strings.Repeat("x", maxDescriptionLen+1)),
+			Description: pstr(strings.Repeat("x", maxLineItemDescriptionLen+1)),
 		},
 	}
 
 	for name, in := range tests {
 		t.Run(name, func(t *testing.T) {
-			repo := newFakeRepo()
+			repo := newFakeLineItemRepo()
 			seedItem(repo, db.LineItemStatusReimbDraft)
 
-			_, err := NewService(repo).UpdateActuals(context.Background(), 1, in)
-			if !errors.Is(err, ErrValidation) {
-				t.Fatalf("UpdateActuals returned %v, want ErrValidation", err)
+			_, err := NewLineItemService(repo).
+				UpdateActuals(context.Background(), 1, in)
+			if !errors.Is(err, ErrInvalidLineItem) {
+				t.Fatalf("UpdateActuals returned %v, want ErrInvalidLineItem", err)
 			}
 		})
 	}
 }
 
 func TestAttachReimbursementRequestOnlyFromApproved(t *testing.T) {
-	for _, status := range AllStatuses {
+	for _, status := range AllLineItemStatuses {
 		t.Run(string(status), func(t *testing.T) {
-			repo := newFakeRepo()
+			repo := newFakeLineItemRepo()
 			seedItem(repo, status)
-			svc := NewService(repo)
+			svc := NewLineItemService(repo)
 
 			item, err := svc.AttachReimbursementRequest(context.Background(), 1, 42)
 			if status == db.LineItemStatusPrApproved {
@@ -619,29 +648,29 @@ func TestAttachReimbursementRequestOnlyFromApproved(t *testing.T) {
 				}
 				return
 			}
-			if !errors.Is(err, ErrInvalidTransition) {
-				t.Fatalf("returned %v, want ErrInvalidTransition", err)
+			if !errors.Is(err, ErrInvalidLineItemTransition) {
+				t.Fatalf("returned %v, want ErrInvalidLineItemTransition", err)
 			}
 		})
 	}
 }
 
 func TestAttachReimbursementRequestValidatesID(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	seedItem(repo, db.LineItemStatusPrApproved)
 
-	svc := NewService(repo)
+	svc := NewLineItemService(repo)
 	_, err := svc.AttachReimbursementRequest(context.Background(), 1, 0)
-	if !errors.Is(err, ErrValidation) {
-		t.Fatalf("returned %v, want ErrValidation", err)
+	if !errors.Is(err, ErrInvalidLineItem) {
+		t.Fatalf("returned %v, want ErrInvalidLineItem", err)
 	}
 }
 
 func TestArchiveClearsIsActiveAndKeepsStatus(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	seedItem(repo, db.LineItemStatusPrPending)
 
-	if err := NewService(repo).Archive(context.Background(), 1); err != nil {
+	if err := NewLineItemService(repo).Archive(context.Background(), 1); err != nil {
 		t.Fatalf("Archive returned %v, want nil", err)
 	}
 	if repo.items[1].IsActive {
@@ -653,9 +682,9 @@ func TestArchiveClearsIsActiveAndKeepsStatus(t *testing.T) {
 }
 
 func TestArchiveIsIdempotent(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	seedItem(repo, db.LineItemStatusPrDraft)
-	svc := NewService(repo)
+	svc := NewLineItemService(repo)
 	ctx := context.Background()
 
 	if err := svc.Archive(ctx, 1); err != nil {
@@ -667,23 +696,26 @@ func TestArchiveIsIdempotent(t *testing.T) {
 }
 
 func TestMutationsOnMissingItemReturnNotFound(t *testing.T) {
-	svc := NewService(newFakeRepo())
+	svc := NewLineItemService(newFakeLineItemRepo())
 	ctx := context.Background()
 
 	_, err := svc.UpdateEstimates(ctx, 404, validEstimates())
-	if !errors.Is(err, ErrNotFound) {
-		t.Errorf("UpdateEstimates returned %v, want ErrNotFound", err)
+	if !errors.Is(err, ErrLineItemNotFound) {
+		t.Errorf("UpdateEstimates returned %v, want ErrLineItemNotFound", err)
 	}
-	_, err = svc.UpdateActuals(ctx, 404, ActualsInput{})
-	if !errors.Is(err, ErrNotFound) {
-		t.Errorf("UpdateActuals returned %v, want ErrNotFound", err)
+	_, err = svc.UpdateActuals(ctx, 404, LineItemActualsInput{})
+	if !errors.Is(err, ErrLineItemNotFound) {
+		t.Errorf("UpdateActuals returned %v, want ErrLineItemNotFound", err)
 	}
 	_, err = svc.AttachReimbursementRequest(ctx, 404, 42)
-	if !errors.Is(err, ErrNotFound) {
-		t.Errorf("AttachReimbursementRequest returned %v, want ErrNotFound", err)
+	if !errors.Is(err, ErrLineItemNotFound) {
+		t.Errorf(
+			"AttachReimbursementRequest returned %v, want ErrLineItemNotFound",
+			err,
+		)
 	}
-	if err = svc.Archive(ctx, 404); !errors.Is(err, ErrNotFound) {
-		t.Errorf("Archive returned %v, want ErrNotFound", err)
+	if err = svc.Archive(ctx, 404); !errors.Is(err, ErrLineItemNotFound) {
+		t.Errorf("Archive returned %v, want ErrLineItemNotFound", err)
 	}
 }
 
@@ -691,18 +723,19 @@ func TestMutationsOnMissingItemReturnNotFound(t *testing.T) {
 // statuses through the service, so the rule the HTTP layer will rely on is
 // checked end to end and not only in the transition table.
 func TestTransitionAllowsExactlyTheLegalEdges(t *testing.T) {
-	for _, from := range AllStatuses {
-		for _, to := range AllStatuses {
+	for _, from := range AllLineItemStatuses {
+		for _, to := range AllLineItemStatuses {
 			t.Run(string(from)+"_to_"+string(to), func(t *testing.T) {
-				repo := newFakeRepo()
+				repo := newFakeLineItemRepo()
 				// Actuals present throughout, so this test measures the
 				// transition rules and not the reimbursement guard.
 				repo.seed(withActuals(seedItem(repo, from)))
 
-				_, err := NewService(repo).Transition(context.Background(), 1, to)
-				if !CanTransition(from, to) {
-					if !errors.Is(err, ErrInvalidTransition) {
-						t.Fatalf("returned %v, want ErrInvalidTransition", err)
+				_, err := NewLineItemService(repo).
+					Transition(context.Background(), 1, to)
+				if !CanTransitionLineItem(from, to) {
+					if !errors.Is(err, ErrInvalidLineItemTransition) {
+						t.Fatalf("returned %v, want ErrInvalidLineItemTransition", err)
 					}
 					return
 				}
@@ -734,15 +767,15 @@ func TestTransitionToReimbPendingRequiresActuals(t *testing.T) {
 
 	for name, fill := range partial {
 		t.Run(name, func(t *testing.T) {
-			repo := newFakeRepo()
+			repo := newFakeLineItemRepo()
 			repo.seed(fill(seedItem(repo, db.LineItemStatusReimbDraft)))
 
-			svc := NewService(repo)
+			svc := NewLineItemService(repo)
 			_, err := svc.Transition(
 				context.Background(), 1, db.LineItemStatusReimbPending,
 			)
-			if !errors.Is(err, ErrValidation) {
-				t.Fatalf("Transition returned %v, want ErrValidation", err)
+			if !errors.Is(err, ErrInvalidLineItem) {
+				t.Fatalf("Transition returned %v, want ErrInvalidLineItem", err)
 			}
 			if repo.items[1].Status != db.LineItemStatusReimbDraft {
 				t.Error("a rejected transition still moved the status")
@@ -752,10 +785,10 @@ func TestTransitionToReimbPendingRequiresActuals(t *testing.T) {
 }
 
 func TestTransitionToReimbPendingWithCompleteActuals(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	repo.seed(withActuals(seedItem(repo, db.LineItemStatusReimbDraft)))
 
-	svc := NewService(repo)
+	svc := NewLineItemService(repo)
 	item, err := svc.Transition(
 		context.Background(), 1, db.LineItemStatusReimbPending,
 	)
@@ -770,24 +803,24 @@ func TestTransitionToReimbPendingWithCompleteActuals(t *testing.T) {
 // Archiving is a soft delete, so an archived item must not keep moving through
 // the lifecycle and end up approved.
 func TestTransitionRejectsArchivedItem(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	item := seedItem(repo, db.LineItemStatusPrDraft)
 	item.IsActive = false
 	repo.seed(item)
 
-	svc := NewService(repo)
+	svc := NewLineItemService(repo)
 	_, err := svc.Transition(context.Background(), 1, db.LineItemStatusPrPending)
-	if !errors.Is(err, ErrInvalidTransition) {
-		t.Fatalf("Transition returned %v, want ErrInvalidTransition", err)
+	if !errors.Is(err, ErrInvalidLineItemTransition) {
+		t.Fatalf("Transition returned %v, want ErrInvalidLineItemTransition", err)
 	}
 }
 
 func TestTransitionLeavesOtherFieldsAlone(t *testing.T) {
-	repo := newFakeRepo()
+	repo := newFakeLineItemRepo()
 	before := withActuals(seedItem(repo, db.LineItemStatusPrDraft))
 	repo.seed(before)
 
-	svc := NewService(repo)
+	svc := NewLineItemService(repo)
 	after, err := svc.Transition(context.Background(), 1, db.LineItemStatusPrPending)
 	if err != nil {
 		t.Fatalf("Transition returned %v, want nil", err)
@@ -801,11 +834,11 @@ func TestTransitionLeavesOtherFieldsAlone(t *testing.T) {
 }
 
 func TestTransitionOnMissingItemReturnsNotFound(t *testing.T) {
-	svc := NewService(newFakeRepo())
+	svc := NewLineItemService(newFakeLineItemRepo())
 
 	_, err := svc.Transition(context.Background(), 404, db.LineItemStatusPrPending)
-	if !errors.Is(err, ErrNotFound) {
-		t.Fatalf("Transition returned %v, want ErrNotFound", err)
+	if !errors.Is(err, ErrLineItemNotFound) {
+		t.Fatalf("Transition returned %v, want ErrLineItemNotFound", err)
 	}
 }
 
@@ -825,4 +858,171 @@ func ids(items []db.LineItem) []int64 {
 		out[i] = item.ID
 	}
 	return out
+}
+
+// legalEdges restates the lifecycle independently of lineItemTransitions, so
+// that the exhaustive test below checks the implementation against a spec
+// rather than against itself. Any edge not listed here must be rejected.
+var legalEdges = map[[2]db.LineItemStatus]bool{
+	{db.LineItemStatusPrDraft, db.LineItemStatusPrPending}:          true,
+	{db.LineItemStatusPrPending, db.LineItemStatusPrApproved}:       true,
+	{db.LineItemStatusPrPending, db.LineItemStatusPrRejected}:       true,
+	{db.LineItemStatusPrApproved, db.LineItemStatusReimbDraft}:      true,
+	{db.LineItemStatusReimbDraft, db.LineItemStatusReimbPending}:    true,
+	{db.LineItemStatusReimbPending, db.LineItemStatusReimbApproved}: true,
+	{db.LineItemStatusReimbPending, db.LineItemStatusReimbRejected}: true,
+}
+
+var terminalStatuses = []db.LineItemStatus{
+	db.LineItemStatusPrRejected,
+	db.LineItemStatusReimbApproved,
+	db.LineItemStatusReimbRejected,
+}
+
+// TestCanTransitionExhaustive checks every ordered pair of statuses, so a new
+// edge cannot be added to the transition table without a matching change here.
+func TestCanTransitionExhaustive(t *testing.T) {
+	for _, from := range AllLineItemStatuses {
+		for _, to := range AllLineItemStatuses {
+			want := legalEdges[[2]db.LineItemStatus{from, to}]
+			if got := CanTransitionLineItem(from, to); got != want {
+				t.Errorf(
+					"CanTransitionLineItem(%q, %q) = %v, want %v",
+					from, to, got, want,
+				)
+			}
+		}
+	}
+}
+
+func TestCanTransitionRejectsSelfTransitions(t *testing.T) {
+	for _, s := range AllLineItemStatuses {
+		if CanTransitionLineItem(s, s) {
+			t.Errorf("CanTransitionLineItem(%q, %q) = true, want false", s, s)
+		}
+	}
+}
+
+func TestCanTransitionRejectsUnknownStatus(t *testing.T) {
+	unknown := db.LineItemStatus("not_a_status")
+
+	if CanTransitionLineItem(unknown, db.LineItemStatusPrPending) {
+		t.Error("CanTransitionLineItem from an unknown status = true, want false")
+	}
+	if CanTransitionLineItem(db.LineItemStatusPrDraft, unknown) {
+		t.Error("CanTransitionLineItem to an unknown status = true, want false")
+	}
+}
+
+func TestTerminalStatusesHaveNoOutgoingEdges(t *testing.T) {
+	for _, s := range terminalStatuses {
+		if !IsTerminalLineItemStatus(s) {
+			t.Errorf("IsTerminalLineItemStatus(%q) = false, want true", s)
+		}
+		if next := NextLineItemStates(s); len(next) != 0 {
+			t.Errorf("NextLineItemStates(%q) = %v, want empty", s, next)
+		}
+	}
+}
+
+func TestNonTerminalStatusesHaveOutgoingEdges(t *testing.T) {
+	terminal := make(map[db.LineItemStatus]bool, len(terminalStatuses))
+	for _, s := range terminalStatuses {
+		terminal[s] = true
+	}
+
+	for _, s := range AllLineItemStatuses {
+		if terminal[s] {
+			continue
+		}
+		if IsTerminalLineItemStatus(s) {
+			t.Errorf("IsTerminalLineItemStatus(%q) = true, want false", s)
+		}
+		if len(NextLineItemStates(s)) == 0 {
+			t.Errorf("NextLineItemStates(%q) is empty, want at least one edge", s)
+		}
+	}
+}
+
+func TestIsTerminalRejectsUnknownStatus(t *testing.T) {
+	if IsTerminalLineItemStatus(db.LineItemStatus("not_a_status")) {
+		t.Error("IsTerminalLineItemStatus(unknown) = true, want false")
+	}
+}
+
+// TestNextStatesAgreesWithCanTransition guards against the two accessors
+// drifting apart.
+func TestNextStatesAgreesWithCanTransition(t *testing.T) {
+	for _, from := range AllLineItemStatuses {
+		for _, to := range NextLineItemStates(from) {
+			if !CanTransitionLineItem(from, to) {
+				t.Errorf(
+					"NextLineItemStates(%q) offers %q, CanTransitionLineItem rejects",
+					from, to,
+				)
+			}
+		}
+	}
+}
+
+// TestNextStatesReturnsCopy ensures callers cannot corrupt the transition
+// table through the returned slice.
+func TestNextStatesReturnsCopy(t *testing.T) {
+	const from = db.LineItemStatusPrPending
+
+	first := NextLineItemStates(from)
+	if len(first) == 0 {
+		t.Fatalf("NextLineItemStates(%q) is empty, cannot test copy semantics", from)
+	}
+	first[0] = db.LineItemStatus("mutated")
+
+	second := NextLineItemStates(from)
+	if second[0] == db.LineItemStatus("mutated") {
+		t.Error(
+			"NextLineItemStates returned a view of the transition table, " +
+				"want a copy",
+		)
+	}
+}
+
+func TestIsReimbursementPhase(t *testing.T) {
+	tests := map[db.LineItemStatus]bool{
+		db.LineItemStatusPrDraft:        false,
+		db.LineItemStatusPrPending:      false,
+		db.LineItemStatusPrApproved:     false,
+		db.LineItemStatusPrRejected:     false,
+		db.LineItemStatusReimbDraft:     true,
+		db.LineItemStatusReimbPending:   true,
+		db.LineItemStatusReimbApproved:  true,
+		db.LineItemStatusReimbRejected:  true,
+		db.LineItemStatus("not_status"): false,
+	}
+
+	for status, want := range tests {
+		if got := IsLineItemReimbursementPhase(status); got != want {
+			t.Errorf(
+				"IsLineItemReimbursementPhase(%q) = %v, want %v",
+				status, got, want,
+			)
+		}
+	}
+}
+
+// TestAllStatusesCoversTransitionTable keeps AllLineItemStatuses honest: if a status is
+// added to the enum and the transition table but not to AllLineItemStatuses, the
+// exhaustive test above would silently stop covering it.
+func TestAllStatusesCoversTransitionTable(t *testing.T) {
+	got, want := len(AllLineItemStatuses), len(lineItemTransitions)
+	if got != want {
+		t.Errorf(
+			"AllLineItemStatuses has %d entries, transition table has %d",
+			got, want,
+		)
+	}
+
+	for _, s := range AllLineItemStatuses {
+		if _, ok := lineItemTransitions[s]; !ok {
+			t.Errorf("status %q in AllLineItemStatuses but not in transition table", s)
+		}
+	}
 }

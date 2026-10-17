@@ -27,6 +27,7 @@ func main() {
 
 	// each module wires it own
 	wire.WireEvent(queries, router)
+	wire.WireLineItem(queries, router)
 
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	if err := router.Run(":8080"); err != nil {

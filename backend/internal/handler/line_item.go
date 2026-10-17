@@ -1,10 +1,9 @@
-// Package lineitem exposes the line item service over HTTP.
-//
-// It is the outermost of three layers and holds no rules: it parses input,
-// calls one service method, and maps the resulting error to a status code. The
-// rules it enforces on a client's behalf live in
-// backend/internal/service/lineitem.
-package lineitem
+// Line item HTTP handlers: the outermost of three layers. They hold no rules:
+// each parses input, calls one service method, and maps the resulting error to
+// a status code. The rules enforced on a client's behalf live in
+// service/line_item.go.
+
+package handler
 
 import (
 	"errors"
@@ -13,25 +12,25 @@ import (
 	"time"
 
 	"backend/db"
-	service "backend/internal/service/lineitem"
+	"backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Handler adapts HTTP to the service. It holds no rules of its own: it parses
+// LineItemHandler adapts HTTP to the service. It holds no rules of its own: it parses
 // input, calls one service method, and maps the resulting error to a status
 // code.
-type Handler struct {
-	svc service.Service
+type LineItemHandler struct {
+	svc service.LineItemService
 }
 
-// NewHandler returns a handler backed by the given service.
-func NewHandler(svc service.Service) *Handler {
-	return &Handler{svc: svc}
+// NewLineItemHandler returns a handler backed by the given service.
+func NewLineItemHandler(svc service.LineItemService) *LineItemHandler {
+	return &LineItemHandler{svc: svc}
 }
 
-// lineItemResponse is the wire shape of a line item.
+// LineItemResponse is the wire shape of a line item.
 //
 // It exists so pgtype values never reach the client: a pgtype.Int8 marshals as
 // {"Int64":0,"Valid":false}, which would force every consumer to understand
@@ -39,7 +38,7 @@ func NewHandler(svc service.Service) *Handler {
 //
 // All money fields are in cents. The totals are derived rather than stored,
 // so a client never has to decide how to combine quantity and cost itself.
-type lineItemResponse struct {
+type LineItemResponse struct {
 	ID                     int64    `json:"id"`
 	PurchaseRequestID      int64    `json:"purchase_request_id"`
 	ReimbursementRequestID *int64   `json:"reimbursement_request_id"`
@@ -63,60 +62,61 @@ type lineItemResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type totalsResponse struct {
+type LineItemTotalsResponse struct {
 	EstimatedTotal int64 `json:"estimated_total"`
 	ActualTotal    int64 `json:"actual_total"`
 }
 
-type createRequest struct {
+type createLineItemRequest struct {
 	EstimatedQuantity    int64  `json:"estimated_quantity"`
 	EstimatedCostPerItem int64  `json:"estimated_cost_per_item"`
 	EstimatedUnitCost    int64  `json:"estimated_unit_cost"`
 	Description          string `json:"description"`
 }
 
-// estimatesRequest and actualsRequest mirror their service inputs field for
-// field, differing only in carrying json tags, and are converted rather than
-// copied across. Go permits the conversion because only the tags differ; if
-// either side gains a field the conversion stops compiling, which is the
-// intended warning rather than a silently dropped value.
-type estimatesRequest struct {
+// lineItemEstimatesRequest and lineItemActualsRequest mirror their service
+// inputs field for field, differing only in carrying json tags, and are
+// converted rather than copied across. Go permits the conversion because only
+// the tags differ; if either side gains a field the conversion stops
+// compiling, which is the intended warning rather than a silently dropped
+// value.
+type lineItemEstimatesRequest struct {
 	EstimatedQuantity    int64  `json:"estimated_quantity"`
 	EstimatedCostPerItem int64  `json:"estimated_cost_per_item"`
 	EstimatedUnitCost    int64  `json:"estimated_unit_cost"`
 	Description          string `json:"description"`
 }
 
-// actualsRequest uses pointers throughout so an omitted field is
+// lineItemActualsRequest uses pointers throughout so an omitted field is
 // distinguishable from a zero one: omitting a figure leaves it untouched,
 // which is how a reimbursement is filled in as receipts arrive.
-type actualsRequest struct {
+type lineItemActualsRequest struct {
 	ActualQuantity    *int64  `json:"actual_quantity"`
 	ActualCostPerItem *int64  `json:"actual_cost_per_item"`
 	ActualUnitCost    *int64  `json:"actual_unit_cost"`
 	Description       *string `json:"description"`
 }
 
-type transitionRequest struct {
+type lineItemTransitionRequest struct {
 	Status string `json:"status"`
 }
 
-type attachRequest struct {
+type lineItemAttachRequest struct {
 	ReimbursementRequestID int64 `json:"reimbursement_request_id"`
 }
 
 // Create opens a line item on a purchase request.
-func (h *Handler) Create(c *gin.Context) {
+func (h *LineItemHandler) Create(c *gin.Context) {
 	prID, ok := h.pathID(c, "prID")
 	if !ok {
 		return
 	}
-	var req createRequest
+	var req createLineItemRequest
 	if !bindJSON(c, &req) {
 		return
 	}
 
-	item, err := h.svc.Create(c.Request.Context(), service.CreateInput{
+	item, err := h.svc.Create(c.Request.Context(), service.CreateLineItemInput{
 		PurchaseRequestID:    prID,
 		EstimatedQuantity:    req.EstimatedQuantity,
 		EstimatedCostPerItem: req.EstimatedCostPerItem,
@@ -124,118 +124,118 @@ func (h *Handler) Create(c *gin.Context) {
 		Description:          req.Description,
 	})
 	if err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, toResponse(item))
+	c.JSON(http.StatusCreated, toLineItemResponse(item))
 }
 
 // GetByID returns one line item.
-func (h *Handler) GetByID(c *gin.Context) {
+func (h *LineItemHandler) GetByID(c *gin.Context) {
 	id, ok := h.pathID(c, "id")
 	if !ok {
 		return
 	}
 	item, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, toResponse(item))
+	c.JSON(http.StatusOK, toLineItemResponse(item))
 }
 
 // ListByPurchaseRequest returns the active line items on a purchase request.
-func (h *Handler) ListByPurchaseRequest(c *gin.Context) {
+func (h *LineItemHandler) ListByPurchaseRequest(c *gin.Context) {
 	prID, ok := h.pathID(c, "prID")
 	if !ok {
 		return
 	}
 	items, err := h.svc.ListByPurchaseRequest(c.Request.Context(), prID)
 	if err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, toResponses(items))
+	c.JSON(http.StatusOK, toLineItemResponses(items))
 }
 
 // ListByReimbursementRequest returns the line items on a reimbursement.
-func (h *Handler) ListByReimbursementRequest(c *gin.Context) {
+func (h *LineItemHandler) ListByReimbursementRequest(c *gin.Context) {
 	reimbID, ok := h.pathID(c, "reimbID")
 	if !ok {
 		return
 	}
 	items, err := h.svc.ListByReimbursementRequest(c.Request.Context(), reimbID)
 	if err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, toResponses(items))
+	c.JSON(http.StatusOK, toLineItemResponses(items))
 }
 
 // Totals returns the summed estimated and actual cost of a purchase request.
-func (h *Handler) Totals(c *gin.Context) {
+func (h *LineItemHandler) Totals(c *gin.Context) {
 	prID, ok := h.pathID(c, "prID")
 	if !ok {
 		return
 	}
 	totals, err := h.svc.TotalsByPurchaseRequest(c.Request.Context(), prID)
 	if err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, totalsResponse(totals))
+	c.JSON(http.StatusOK, LineItemTotalsResponse(totals))
 }
 
 // UpdateEstimates revises what the requester expects to spend.
-func (h *Handler) UpdateEstimates(c *gin.Context) {
+func (h *LineItemHandler) UpdateEstimates(c *gin.Context) {
 	id, ok := h.pathID(c, "id")
 	if !ok {
 		return
 	}
-	var req estimatesRequest
+	var req lineItemEstimatesRequest
 	if !bindJSON(c, &req) {
 		return
 	}
 
 	item, err := h.svc.UpdateEstimates(
-		c.Request.Context(), id, service.EstimatesInput(req),
+		c.Request.Context(), id, service.LineItemEstimatesInput(req),
 	)
 	if err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, toResponse(item))
+	c.JSON(http.StatusOK, toLineItemResponse(item))
 }
 
 // UpdateActuals records what was really spent.
-func (h *Handler) UpdateActuals(c *gin.Context) {
+func (h *LineItemHandler) UpdateActuals(c *gin.Context) {
 	id, ok := h.pathID(c, "id")
 	if !ok {
 		return
 	}
-	var req actualsRequest
+	var req lineItemActualsRequest
 	if !bindJSON(c, &req) {
 		return
 	}
 
 	item, err := h.svc.UpdateActuals(
-		c.Request.Context(), id, service.ActualsInput(req),
+		c.Request.Context(), id, service.LineItemActualsInput(req),
 	)
 	if err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, toResponse(item))
+	c.JSON(http.StatusOK, toLineItemResponse(item))
 }
 
 // AttachReimbursementRequest moves an approved line item into the
 // reimbursement phase.
-func (h *Handler) AttachReimbursementRequest(c *gin.Context) {
+func (h *LineItemHandler) AttachReimbursementRequest(c *gin.Context) {
 	id, ok := h.pathID(c, "id")
 	if !ok {
 		return
 	}
-	var req attachRequest
+	var req lineItemAttachRequest
 	if !bindJSON(c, &req) {
 		return
 	}
@@ -244,21 +244,21 @@ func (h *Handler) AttachReimbursementRequest(c *gin.Context) {
 		c.Request.Context(), id, req.ReimbursementRequestID,
 	)
 	if err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, toResponse(item))
+	c.JSON(http.StatusOK, toLineItemResponse(item))
 }
 
 // Transition moves a line item along the lifecycle. The statuses a given item
 // will accept are published as allowed_transitions on every response, so a
 // client does not have to encode the lifecycle itself.
-func (h *Handler) Transition(c *gin.Context) {
+func (h *LineItemHandler) Transition(c *gin.Context) {
 	id, ok := h.pathID(c, "id")
 	if !ok {
 		return
 	}
-	var req transitionRequest
+	var req lineItemTransitionRequest
 	if !bindJSON(c, &req) {
 		return
 	}
@@ -267,20 +267,20 @@ func (h *Handler) Transition(c *gin.Context) {
 		c.Request.Context(), id, db.LineItemStatus(req.Status),
 	)
 	if err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, toResponse(item))
+	c.JSON(http.StatusOK, toLineItemResponse(item))
 }
 
 // Archive soft deletes a line item.
-func (h *Handler) Archive(c *gin.Context) {
+func (h *LineItemHandler) Archive(c *gin.Context) {
 	id, ok := h.pathID(c, "id")
 	if !ok {
 		return
 	}
 	if err := h.svc.Archive(c.Request.Context(), id); err != nil {
-		fail(c, err)
+		failLineItem(c, err)
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -288,7 +288,7 @@ func (h *Handler) Archive(c *gin.Context) {
 
 // pathID reads a positive integer path parameter, answering 400 itself if it
 // is missing or malformed. The bool reports whether the caller should carry on.
-func (h *Handler) pathID(c *gin.Context, name string) (int64, bool) {
+func (h *LineItemHandler) pathID(c *gin.Context, name string) (int64, bool) {
 	raw := c.Param(name)
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
@@ -311,19 +311,19 @@ func bindJSON(c *gin.Context, target any) bool {
 	return true
 }
 
-// fail maps a service error to a status code. It is the only place that
+// failLineItem maps a service error to a status code. It is the only place that
 // translation happens, so the handlers stay free of policy.
 //
 // Anything unrecognised is a 500 and its detail is withheld from the client,
 // but attached to the context so logging middleware can record it.
-func fail(c *gin.Context, err error) {
+func failLineItem(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, service.ErrNotFound):
+	case errors.Is(err, service.ErrLineItemNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-	case errors.Is(err, service.ErrValidation):
+	case errors.Is(err, service.ErrInvalidLineItem):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	case errors.Is(err, service.ErrInvalidTransition),
-		errors.Is(err, service.ErrImmutableField):
+	case errors.Is(err, service.ErrInvalidLineItemTransition),
+		errors.Is(err, service.ErrImmutableLineItemField):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	default:
 		_ = c.Error(err)
@@ -331,14 +331,14 @@ func fail(c *gin.Context, err error) {
 	}
 }
 
-func toResponse(item db.LineItem) lineItemResponse {
-	next := service.NextStates(item.Status)
+func toLineItemResponse(item db.LineItem) LineItemResponse {
+	next := service.NextLineItemStates(item.Status)
 	allowed := make([]string, len(next))
 	for i, status := range next {
 		allowed[i] = string(status)
 	}
 
-	res := lineItemResponse{
+	res := LineItemResponse{
 		ID:                     item.ID,
 		PurchaseRequestID:      item.PurchaseRequestID,
 		ReimbursementRequestID: nullInt(item.ReimbursementRequestID),
@@ -367,12 +367,12 @@ func toResponse(item db.LineItem) lineItemResponse {
 	return res
 }
 
-// toResponses always returns a non-nil slice, so an empty result marshals as
+// toLineItemResponses always returns a non-nil slice, so an empty result marshals as
 // [] rather than null and clients can iterate it unconditionally.
-func toResponses(items []db.LineItem) []lineItemResponse {
-	out := make([]lineItemResponse, 0, len(items))
+func toLineItemResponses(items []db.LineItem) []LineItemResponse {
+	out := make([]LineItemResponse, 0, len(items))
 	for _, item := range items {
-		out = append(out, toResponse(item))
+		out = append(out, toLineItemResponse(item))
 	}
 	return out
 }
