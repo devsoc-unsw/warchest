@@ -84,11 +84,13 @@ paths:
 
         There is no default status. CLOSED is not allowed during creation.
         Event time, location and description are optional for both buttons.
-        Budget may be omitted or null for DRAFT, but must be an integer for
-        IN_PROGRESS. Missing budget does not automatically change the status.
-        
+
+        Budget may be omitted, null or 0 for DRAFT; both are treated as 0.
+        IN_PROGRESS requires an integer budget greater than 0, checked in the
+        handler.
+
         TODO(Money Module): confirm amount units and save the supplied budget.
-        The current backend validates its presence but does not save the amount.
+        The current backend validates the input but does not save the amount.
 
         created_by is a temporary request field matching the current backend.
         TODO(auth): obtain this user ID from verified authentication instead.
@@ -119,16 +121,20 @@ paths:
                   status: DRAFT
       responses:
         '201':
-          description: Event created with the requested status.
+          description: |
+            Event created with the requested status.
+            Budget returns the provided amount, or 0 if no amount is set for a draft. 
+            The amount is not yet saved to the Money Module.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Event'
         '400':
           description: |
-            Invalid JSON or input. The name and society ID must not be blank,
+            Invalid JSON or input. 
+            The name and society ID must not be blank,
             created_by must be a UUID, and status must be DRAFT or IN_PROGRESS.
-            IN_PROGRESS also requires a non-negative integer budget.
+            IN_PROGRESS also requires an integer budget greater than 0.
           content:
             application/json:
               schema:
@@ -173,9 +179,10 @@ components:
           nullable: true
           description: |
             Unsigned 64-bit integer input. Decimal and negative values are rejected.
-            Optional for DRAFT; required and non-null for IN_PROGRESS.
+            Optional for DRAFT; omitted or null values are treated as 0.
+            IN_PROGRESS requires a value greater than 0, checked in the handler.
             Validated as input only; the amount is not currently saved.
-            TODO: confirm amount units and whether zero is allowed by business rules.
+            TODO: confirm amount units with Money Module.
         event_time:
           type: string
           format: date-time
@@ -196,6 +203,7 @@ components:
         - event_name
         - society_id
         - status
+        - budget
         - created_by
         - event_time
         - location
@@ -216,6 +224,13 @@ components:
         status:
           type: string
           enum: [DRAFT, IN_PROGRESS, CLOSED]
+        budget:
+          type: integer
+          minimum: 0
+          description: |
+            POST returns the submitted amount, or 0 for a draft without an amount.
+            TODO(Money Module): use confirmed financial data when integrated,
+            including the amount returned by GET /events.
         created_by:
           type: string
           format: uuid
@@ -242,6 +257,7 @@ components:
         event_name: Welcome BBQ
         society_id: society-123
         status: IN_PROGRESS
+        budget: 1000
         created_by: 277c2d81-0fb2-4c9e-8480-a6ed872b3f46
         event_time: '2026-11-01T18:00:00+11:00'
         location: UNSW

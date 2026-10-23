@@ -24,7 +24,7 @@ type CreateEventInput struct {
 	SocietyID   string
 	CreatedBy   string
 	Status      db.EventStatus
-	Budget      *uint64
+	Budget      uint64
 }
 
 type EventService interface {
@@ -50,9 +50,6 @@ func (s *eventServiceImpl) CreateEvent(
 	// with the Money Module contract.
 	if input.Status != db.EventStatusDRAFT && input.Status != db.EventStatusINPROGRESS {
 		return db.Budget{}, errors.New("status must be DRAFT or IN_PROGRESS")
-	}
-	if input.Status == db.EventStatusINPROGRESS && input.Budget == nil {
-		return db.Budget{}, errors.New("budget is required for IN_PROGRESS")
 	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {

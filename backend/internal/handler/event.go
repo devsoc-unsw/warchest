@@ -27,7 +27,7 @@ type createEventRequest struct {
 	Description string         `json:"description"`
 	SocietyID   string         `json:"society_id"`
 	Status      db.EventStatus `json:"status"`
-	Budget      *uint64        `json:"budget"`
+	Budget      uint64         `json:"budget"`
 
 	CreatedBy string `json:"created_by"`
 }
@@ -38,6 +38,13 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	// Create requires a positive budget; drafts can use 0.
+	if req.Status == db.EventStatusINPROGRESS && req.Budget == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "budget must be greater than 0 for IN_PROGRESS",
+		})
 		return
 	}
 	event, err := h.service.CreateEvent(c.Request.Context(), service.CreateEventInput{
@@ -65,6 +72,7 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		"event_name":  event.Name,
 		"society_id":  event.SocietyID,
 		"status":      event.Status.EventStatus,
+		"budget":      req.Budget,
 		"created_by":  event.CreatedBy.String(),
 		"event_time":  event.EventTime,
 		"location":    event.Location,

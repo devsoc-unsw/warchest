@@ -15,13 +15,15 @@ The backend uses the status sent by the frontend. There is no default status.
 
 | Status | Budget | Allowed |
 |---|---|---|
-| `DRAFT` | Missing or null | Yes |
+| `DRAFT` | Missing, null or `0` | Yes; treated as `0` |
 | `DRAFT` | Non-negative integer | Yes |
-| `IN_PROGRESS` | Missing or null | No; return `400` |
-| `IN_PROGRESS` | Non-negative integer | Yes |
+| `IN_PROGRESS` | Missing, null or `0` | No; return `400` |
+| `IN_PROGRESS` | Integer greater than `0` | Yes |
 
 - Missing budget does not automatically turn an Event into a draft.
 - Budget uses `uint64`, not a floating-point type. Decimal and negative inputs are rejected.
+- The handler checks the budget before calling the service.
+- A draft without a budget returns `budget: 0`, not `null`.
 - Warchest does not store monetary amounts. Saving the supplied budget in Money Module is still TODO.
 
 ### Other fields
@@ -33,7 +35,7 @@ The backend uses the status sent by the frontend. There is no default status.
 
 ## 2. Start Event
 
-- Moving from `DRAFT` to `IN_PROGRESS` must also require a budget.
+- Moving from `DRAFT` to `IN_PROGRESS` must also require a budget greater than `0`.
 - TODO: implement this rule in the Start Event service; this change only covers Create Event.
 
 ## 3. Portfolio
