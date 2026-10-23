@@ -46,9 +46,6 @@ func (s *eventServiceImpl) CreateEvent(
 	// TODO: validate type-specific fields and lifecycle rules in the service.
 	// TODO(Money Module): confirm creation and Budget linking requirements
 	// with the Money Module contract.
-	if input.Status != db.EventStatusDRAFT && input.Status != db.EventStatusINPROGRESS {
-		return db.Budget{}, errors.New("status must be DRAFT or IN_PROGRESS")
-	}
 	// Create needs a budget above 0. Drafts can use 0.
 	if input.Status == db.EventStatusINPROGRESS && input.Budget == 0 {
 		return db.Budget{}, errors.New("budget must be greater than 0 for IN_PROGRESS")
@@ -61,7 +58,6 @@ func (s *eventServiceImpl) CreateEvent(
 	if societyID == "" {
 		return db.Budget{}, errors.New("society ID is required")
 	}
-	// The frontend sends DRAFT for Create Draft and IN_PROGRESS for Create.
 	// TODO(Money Module): save input.Budget after its API and amount unit are agreed.
 	// Leave the data conversion to repository layer.
 	params := repository.CreateEventInput{

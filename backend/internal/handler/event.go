@@ -42,6 +42,14 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
+	// New Events can only be DRAFT or IN_PROGRESS.
+	if req.Status != db.EventStatusDRAFT &&
+		req.Status != db.EventStatusINPROGRESS {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "status must be DRAFT or IN_PROGRESS",
+		})
+		return
+	}
 	event, err := h.service.CreateEvent(c.Request.Context(), service.CreateEventInput{
 		Name:        req.Name,
 		EventTime:   req.EventTime,
