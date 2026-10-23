@@ -1,5 +1,3 @@
-// business logic and validation
-
 package service
 
 import (
@@ -7,29 +5,30 @@ import (
 	"backend/internal/repository"
 	"context"
 	"errors"
+	"log"
+	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// define EventService, what event can do
-// create interface for testing
-type EventService interface {
-	CreateEvent(
-		ctx context.Context,
-		name string,
-		eventTime time.Time,
-		budget int64,
-		status db.EventStatus,
-		location string,
-		description string,
-		societyID string,
-		createdBy string,
-	) (db.Event, error)
-	// add more... delete/update...
+// Used by the handler to distinguish a database failure from invalid input.
+var ErrCreateEvent = errors.New("failed to create event")
+
+// Budget is input only. Money Module owns monetary storage.
+type CreateEventInput struct {
+	Name        string
+	EventTime   time.Time
+	Location    string
+	Description string
+	SocietyID   string
+	CreatedBy   string
+	Status      db.EventStatus
+	Budget      uint64
 }
 
-// create eventservice struct and add func to it
+type EventService interface {
+	CreateEvent(ctx context.Context, input CreateEventInput) (db.Budget, error)
+}
+
 type eventServiceImpl struct {
 	repo repository.EventRepository
 }
@@ -40,52 +39,40 @@ func NewEventService(repo repository.EventRepository) EventService {
 
 func (s *eventServiceImpl) CreateEvent(
 	ctx context.Context,
-	name string,
-	eventTime time.Time,
-	budget int64,
-	status db.EventStatus,
-	location string,
-	description string,
-	societyID string,
-	createdBy string,
-) (db.Event, error) {
-	// logic and validation
-	// TODO: auth check
-
-	// event_name cannot be empty
+	input CreateEventInput,
+) (db.Budget, error) {
+	// TODO(auth): authenticate the caller and authorise creation within this society.
+	// TODO(auth): apply Event/Portfolio RBAC rules in business validation
+	// TODO: validate type-specific fields and lifecycle rules in the service.
+	// TODO(Money Module): confirm creation and Budget linking requirements
+	// with the Money Module contract.
+	// Create needs a budget above 0. Drafts can use 0.
+	if input.Status == db.EventStatusINPROGRESS && input.Budget == 0 {
+		return db.Budget{}, errors.New("budget must be greater than 0 for IN_PROGRESS")
+	}
+	name := strings.TrimSpace(input.Name)
 	if name == "" {
-		return db.Event{}, errors.New("event name is required")
+		return db.Budget{}, errors.New("event name is required")
 	}
-	// budget cannot be negative
-	if budget < 0 {
-		return db.Event{}, errors.New("budget could not be negative")
+	societyID := strings.TrimSpace(input.SocietyID)
+	if societyID == "" {
+		return db.Budget{}, errors.New("society ID is required")
 	}
-	// convert plain types into pgtype
-	// convert time.Time to pytype.Timestamptz
-	eventTimePG := pgtype.Timestamptz{Time: eventTime, Valid: true}
-	// convert string to Text
-	locationPG := pgtype.Text{String: location, Valid: true}
-	descriptionPG := pgtype.Text{String: description, Valid: description != ""}
-	// convert societyID string to UUID
-	var societyIDPG pgtype.UUID
-	if err := societyIDPG.Scan(societyID); err != nil {
-		return db.Event{}, errors.New("invalid society ID")
+	// TODO(Money Module): save input.Budget after its API and amount unit are agreed.
+	// Leave the data conversion to repository layer.
+	params := repository.CreateEventInput{
+		Name:        name,
+		SocietyID:   societyID,
+		CreatedBy:   input.CreatedBy,
+		Status:      input.Status,
+		EventTime:   input.EventTime,
+		Location:    input.Location,
+		Description: input.Description,
 	}
-	// convert createdBy string to UUID
-	var createdByPG pgtype.UUID
-	if err := createdByPG.Scan(createdBy); err != nil {
-		return db.Event{}, errors.New("invalid created by ID")
+	event, err := s.repo.CreateEvent(ctx, params)
+	if err != nil {
+		log.Printf("create event failed: %v", err)
+		return db.Budget{}, ErrCreateEvent
 	}
-	params := db.CreateEventParams{
-		EventName:   name,
-		EventTime:   eventTimePG,
-		Budget:      budget,
-		Status:      status,
-		Location:    locationPG,
-		Description: descriptionPG,
-		SocietyID:   societyIDPG,
-		CreatedBy:   createdByPG,
-	}
-	// create the event
-	return s.repo.CreateEvent(ctx, params)
+	return event, nil
 }

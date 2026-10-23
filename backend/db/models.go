@@ -11,6 +11,48 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BudgetType string
+
+const (
+	BudgetTypeEVENT     BudgetType = "EVENT"
+	BudgetTypePORTFOLIO BudgetType = "PORTFOLIO"
+)
+
+func (e *BudgetType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = BudgetType(s)
+	case string:
+		*e = BudgetType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for BudgetType: %T", src)
+	}
+	return nil
+}
+
+type NullBudgetType struct {
+	BudgetType BudgetType
+	Valid      bool // Valid is true if BudgetType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullBudgetType) Scan(value interface{}) error {
+	if value == nil {
+		ns.BudgetType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.BudgetType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullBudgetType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.BudgetType), nil
+}
+
 type EventStatus string
 
 const (
@@ -54,25 +96,26 @@ func (ns NullEventStatus) Value() (driver.Value, error) {
 	return string(ns.EventStatus), nil
 }
 
-type Event struct {
-	ID          pgtype.UUID
-	UserID      pgtype.Int8
-	EventName   string
-	EventTime   pgtype.Timestamptz
-	Budget      int64
-	Status      EventStatus
-	Location    pgtype.Text
-	Description pgtype.Text
-	SocietyID   pgtype.UUID
-	CreatedBy   pgtype.UUID
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+type Budget struct {
+	ID            pgtype.UUID
+	Type          BudgetType
+	SocietyID     string
+	Name          string
+	Description   pgtype.Text
+	MoneyBudgetID pgtype.UUID
+	TeamID        pgtype.Text
+	EventTime     pgtype.Timestamptz
+	Location      pgtype.Text
+	Status        NullEventStatus
+	CreatedBy     pgtype.UUID
+	ArchivedAt    pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
 }
 
-type User struct {
-	ID        int64
-	Username  string
-	Email     string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+type PortfolioYear struct {
+	SocietyID  string
+	TeamID     string
+	Year       int32
+	ArchivedAt pgtype.Timestamptz
 }

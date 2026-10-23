@@ -1,0 +1,283 @@
+openapi: 3.0.3
+
+info:
+  title: Warchest Event API
+  version: 0.1.0
+  description: |
+    Partial API design for Event creation and listing.
+    Only POST /events is currently implemented. GET /events is planned.
+
+    TODO(auth): authentication, creator identity and permission checks.
+    TODO(AMBUSH): user profile lookup and Portfolio synchronisation.
+    TODO(Money Module): budget identity mapping, creation and financial data.
+
+servers:
+  - url: http://localhost:8080
+    description: Local backend
+
+tags:
+  - name: Events
+
+paths:
+  /events:
+    get:
+      tags: [Events]
+      operationId: listEvents
+      summary: List and filter Events
+      description: |
+        Planned endpoint for the Event list page. Returns non-archived Events
+        in the given society.
+
+        Without optional filters, return all non-archived Events in this society.
+        A filter with no matches returns an empty array, not 404.
+        TODO: confirm search fields and matching rules with the frontend.
+        TODO: pagination and ordering.
+        TODO(auth): verify access to this society and filter by permissions.
+      parameters:
+        - name: society_id
+          in: query
+          required: true
+          description: Society whose Events are being listed.
+          schema:
+            type: string
+            minLength: 1
+        - name: status
+          in: query
+          required: false
+          description: Optional lifecycle filter. Omit to include all statuses.
+          schema:
+            type: string
+            enum: [DRAFT, IN_PROGRESS, CLOSED]
+        - name: search
+          in: query
+          required: false
+          description: |
+            Search input from the list page. Proposed query parameter;
+            searchable fields and matching rules are TODO, not yet agreed.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching Events, or an empty array when there are no matches.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '400':
+          description: Missing/blank society ID or invalid status filter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Events]
+      operationId: createEvent
+      summary: Create an Event or save an Event draft
+      description: |
+        The frontend must send status explicitly:
+        - Create sends IN_PROGRESS.
+        - Create Draft sends DRAFT.
+
+        There is no default status. CLOSED is not allowed during creation.
+        Event time, location and description are optional for both buttons.
+
+        Budget may be omitted, null or 0 for DRAFT; both are treated as 0.
+        IN_PROGRESS requires an integer budget greater than 0, checked in the
+        service layer
+
+        TODO(Money Module): confirm amount units and save the supplied budget.
+        The current backend validates the input but does not save the amount.
+
+        created_by is a temporary request field matching the current backend.
+        TODO(auth): obtain this user ID from verified authentication instead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEventRequest'
+            examples:
+              create:
+                summary: Create
+                value:
+                  event_name: Welcome BBQ
+                  society_id: society-123
+                  created_by: 277c2d81-0fb2-4c9e-8480-a6ed872b3f46
+                  status: IN_PROGRESS
+                  budget: 1000
+                  event_time: '2026-11-01T18:00:00+11:00'
+                  location: UNSW
+                  description: Society welcome event
+              createDraft:
+                summary: Create Draft
+                value:
+                  event_name: Workshop planning
+                  society_id: society-123
+                  created_by: 277c2d81-0fb2-4c9e-8480-a6ed872b3f46
+                  status: DRAFT
+      responses:
+        '201':
+          description: |
+            Event created with the requested status.
+            Budget returns the provided amount, or 0 if no amount is set for a draft. 
+            The amount is not yet saved to the Money Module.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          description: |
+            Invalid JSON or input. 
+            The name and society ID must not be blank,
+            created_by must be a UUID, and status must be DRAFT or IN_PROGRESS.
+            IN_PROGRESS also requires an integer budget greater than 0.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: status must be DRAFT or IN_PROGRESS
+        '500':
+          description: The backend could not save the Event.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: failed to create event
+
+
+components:
+  schemas:
+    CreateEventRequest:
+      type: object
+      required: [event_name, society_id, created_by, status]
+      properties:
+        event_name:
+          type: string
+          minLength: 1
+          description: Name of the Event. Must not contain only spaces.
+        society_id:
+          type: string
+          minLength: 1
+          description: External society ID. Must not contain only spaces.
+        created_by:
+          type: string
+          format: uuid
+          description: Temporary creator ID input; replace with authenticated identity.
+        status:
+          type: string
+          enum: [DRAFT, IN_PROGRESS]
+          description: Selected by the frontend button. Required; no default.
+        budget:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: |
+            Unsigned 64-bit integer input. Decimal and negative values are rejected.
+            Optional for DRAFT; omitted or null values are treated as 0.
+            IN_PROGRESS requires a value greater than 0, checked in the service.
+            Validated as input only; the amount is not currently saved.
+            TODO: confirm amount units with Money Module.
+        event_time:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional scheduled time, including a timezone offset or Z.
+        location:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+
+    Event:
+      type: object
+      required:
+        - id
+        - type
+        - event_name
+        - society_id
+        - status
+        - budget
+        - created_by
+        - event_time
+        - location
+        - description
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [EVENT]
+        event_name:
+          type: string
+        society_id:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, IN_PROGRESS, CLOSED]
+        budget:
+          type: integer
+          minimum: 0
+          description: |
+            POST returns the submitted amount, or 0 for a draft without an amount.
+            TODO(Money Module): use confirmed financial data when integrated,
+            including the amount returned by GET /events.
+        created_by:
+          type: string
+          format: uuid
+          description: Creator's user ID. A display name is not stored here.
+        event_time:
+          type: string
+          format: date-time
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      example:
+        id: 9430ce0a-0d46-4903-9e89-714e70cb3804
+        type: EVENT
+        event_name: Welcome BBQ
+        society_id: society-123
+        status: IN_PROGRESS
+        budget: 1000
+        created_by: 277c2d81-0fb2-4c9e-8480-a6ed872b3f46
+        event_time: '2026-11-01T18:00:00+11:00'
+        location: UNSW
+        description: Society welcome event
+        created_at: '2026-10-17T10:00:00Z'
+        updated_at: '2026-10-17T10:00:00Z'
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+  responses:
+    InternalError:
+      description: The backend could not complete the operation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: internal server error
