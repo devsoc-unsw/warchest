@@ -87,7 +87,7 @@ paths:
 
         Budget may be omitted, null or 0 for DRAFT; both are treated as 0.
         IN_PROGRESS requires an integer budget greater than 0, checked in the
-        handler.
+        service layer
 
         TODO(Money Module): confirm amount units and save the supplied budget.
         The current backend validates the input but does not save the amount.
@@ -180,7 +180,7 @@ components:
           description: |
             Unsigned 64-bit integer input. Decimal and negative values are rejected.
             Optional for DRAFT; omitted or null values are treated as 0.
-            IN_PROGRESS requires a value greater than 0, checked in the handler.
+            IN_PROGRESS requires a value greater than 0, checked in the service.
             Validated as input only; the amount is not currently saved.
             TODO: confirm amount units with Money Module.
         event_time:

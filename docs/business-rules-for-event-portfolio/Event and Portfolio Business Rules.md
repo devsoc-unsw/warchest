@@ -22,14 +22,14 @@ The backend uses the status sent by the frontend. There is no default status.
 
 - Missing budget does not automatically turn an Event into a draft.
 - Budget uses `uint64`, not a floating-point type. Decimal and negative inputs are rejected.
-- The handler checks the budget before calling the service.
+- The service layer checks the budget before calling the repository.
 - A draft without a budget returns `budget: 0`, not `null`.
 - Warchest does not store monetary amounts. Saving the supplied budget in Money Module is still TODO.
 
 ### Other fields
 
 - Event name and Society ID cannot be blank.
-- Creator ID must be a UUID. Getting it from authentication is TODO.
+- The handler checks that Creator ID is given and has UUID format. Getting it from authentication is TODO.
 - `CLOSED` is not allowed when creating an Event.
 - Event time, location and description are optional.
 

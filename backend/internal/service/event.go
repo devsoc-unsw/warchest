@@ -8,8 +8,6 @@ import (
 	"log"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Used by the handler to distinguish a database failure from invalid input.
@@ -51,6 +49,10 @@ func (s *eventServiceImpl) CreateEvent(
 	if input.Status != db.EventStatusDRAFT && input.Status != db.EventStatusINPROGRESS {
 		return db.Budget{}, errors.New("status must be DRAFT or IN_PROGRESS")
 	}
+	// Create needs a budget above 0. Drafts can use 0.
+	if input.Status == db.EventStatusINPROGRESS && input.Budget == 0 {
+		return db.Budget{}, errors.New("budget must be greater than 0 for IN_PROGRESS")
+	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return db.Budget{}, errors.New("event name is required")
@@ -59,26 +61,17 @@ func (s *eventServiceImpl) CreateEvent(
 	if societyID == "" {
 		return db.Budget{}, errors.New("society ID is required")
 	}
-	var creator pgtype.UUID
-	if err := creator.Scan(input.CreatedBy); err != nil {
-		return db.Budget{}, errors.New("invalid created by ID")
-	}
 	// The frontend sends DRAFT for Create Draft and IN_PROGRESS for Create.
 	// TODO(Money Module): save input.Budget after its API and amount unit are agreed.
-	params := db.CreateEventParams{
-		Name:      name,
-		SocietyID: societyID,
-		CreatedBy: creator,
-		Status:    db.NullEventStatus{EventStatus: input.Status, Valid: true},
-		EventTime: pgtype.Timestamptz{
-			Time:  input.EventTime,
-			Valid: !input.EventTime.IsZero(),
-		},
-		Location: pgtype.Text{String: input.Location, Valid: input.Location != ""},
-		Description: pgtype.Text{
-			String: input.Description,
-			Valid:  input.Description != "",
-		},
+	// Leave the data conversion to repository layer.
+	params := repository.CreateEventInput{
+		Name:        name,
+		SocietyID:   societyID,
+		CreatedBy:   input.CreatedBy,
+		Status:      input.Status,
+		EventTime:   input.EventTime,
+		Location:    input.Location,
+		Description: input.Description,
 	}
 	event, err := s.repo.CreateEvent(ctx, params)
 	if err != nil {
