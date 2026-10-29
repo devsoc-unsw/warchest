@@ -14,9 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// fakeLineItemRepo is an in-memory Repository. It reproduces the two behaviours of the
-// real schema the service depends on: the column defaults applied on insert
-// (pr_draft, is_active true), and the is_active filter on the list queries.
+// in-memory repo, mimics insert defaults and the is_active filter on lists
 type fakeLineItemRepo struct {
 	items  map[int64]db.LineItem
 	nextID int64
@@ -209,8 +207,7 @@ func TestCreateStoresSuppliedValues(t *testing.T) {
 	}
 }
 
-// An absent description is stored as NULL rather than as an empty string, so
-// "no description" has one representation instead of two.
+// empty description is stored as NULL, not an empty string
 func TestCreateTreatsEmptyDescriptionAsNull(t *testing.T) {
 	svc := NewLineItemService(newFakeLineItemRepo())
 	in := validCreate()
@@ -377,8 +374,7 @@ func TestTotalsByPurchaseRequest(t *testing.T) {
 	}
 }
 
-// A line item with a quantity but no cost yet must contribute nothing, rather
-// than contributing zero and understating the real spend.
+// quantity without cost contributes nothing to the actual total
 func TestTotalsIgnoresPartiallyRecordedActuals(t *testing.T) {
 	repo := newFakeLineItemRepo()
 	repo.seed(db.LineItem{
@@ -426,10 +422,7 @@ func TestReadsPropagateRepositoryErrors(t *testing.T) {
 	}
 }
 
-// TestParamsFromRoundTripsEveryColumn is the guarantee the whole phase 4
-// design rests on: because UpdateLineItem writes all twelve columns, a field
-// missing from lineItemParamsFrom would be silently zeroed on every update. Writing a
-// fully populated row back through it must change nothing.
+// a field missing from lineItemParamsFrom would get zeroed on every update
 func TestParamsFromRoundTripsEveryColumn(t *testing.T) {
 	original := db.LineItem{
 		ID:                     1,
@@ -464,8 +457,7 @@ func TestParamsFromRoundTripsEveryColumn(t *testing.T) {
 func p64(v int64) *int64    { return &v }
 func pstr(s string) *string { return &s }
 
-// seedItem puts one line item in the given status, so a rule can be exercised
-// from every point in the lifecycle.
+// one line item in the given status
 func seedItem(repo *fakeLineItemRepo, status db.LineItemStatus) db.LineItem {
 	item := db.LineItem{
 		ID: 1, PurchaseRequestID: 7, IsActive: true,
@@ -577,8 +569,7 @@ func TestUpdateActualsAllowedOnlyInReimbDraft(t *testing.T) {
 	}
 }
 
-// A reimbursement is filled in as receipts arrive, so an update naming one
-// field must not blank the others.
+// updating one actual must not blank the others
 func TestUpdateActualsAppliesOnlySuppliedFields(t *testing.T) {
 	repo := newFakeLineItemRepo()
 	seedItem(repo, db.LineItemStatusReimbDraft)
@@ -719,16 +710,13 @@ func TestMutationsOnMissingItemReturnNotFound(t *testing.T) {
 	}
 }
 
-// TestTransitionAllowsExactlyTheLegalEdges walks every ordered pair of
-// statuses through the service, so the rule the HTTP layer will rely on is
-// checked end to end and not only in the transition table.
+// every status pair through Transition, not just the table
 func TestTransitionAllowsExactlyTheLegalEdges(t *testing.T) {
 	for _, from := range AllLineItemStatuses {
 		for _, to := range AllLineItemStatuses {
 			t.Run(string(from)+"_to_"+string(to), func(t *testing.T) {
 				repo := newFakeLineItemRepo()
-				// Actuals present throughout, so this test measures the
-				// transition rules and not the reimbursement guard.
+				// actuals set so the reimb_pending guard doesn't interfere
 				repo.seed(withActuals(seedItem(repo, from)))
 
 				_, err := NewLineItemService(repo).
@@ -750,7 +738,7 @@ func TestTransitionAllowsExactlyTheLegalEdges(t *testing.T) {
 	}
 }
 
-// An empty claim must not reach a treasurer looking like a real one.
+// empty claims can't be submitted
 func TestTransitionToReimbPendingRequiresActuals(t *testing.T) {
 	partial := map[string]func(db.LineItem) db.LineItem{
 		"nothing recorded": func(item db.LineItem) db.LineItem { return item },
@@ -800,8 +788,7 @@ func TestTransitionToReimbPendingWithCompleteActuals(t *testing.T) {
 	}
 }
 
-// Archiving is a soft delete, so an archived item must not keep moving through
-// the lifecycle and end up approved.
+// archived items can't move through the lifecycle
 func TestTransitionRejectsArchivedItem(t *testing.T) {
 	repo := newFakeLineItemRepo()
 	item := seedItem(repo, db.LineItemStatusPrDraft)
@@ -842,8 +829,7 @@ func TestTransitionOnMissingItemReturnsNotFound(t *testing.T) {
 	}
 }
 
-// withActuals fills in the reimbursement half, so tests can prove an update
-// touching one half leaves the other alone.
+// fills in the reimbursement half
 func withActuals(item db.LineItem) db.LineItem {
 	item.ActualQuantity = i8(9)
 	item.ActualCostPerItem = i8(900)
@@ -860,11 +846,10 @@ func ids(items []db.LineItem) []int64 {
 	return out
 }
 
-// legalEdges restates the lifecycle independently of lineItemTransitions, so
-// that the exhaustive test below checks the implementation against a spec
-// rather than against itself. Any edge not listed here must be rejected.
+// spec written separately from lineItemTransitions, anything not here must be rejected
 var legalEdges = map[[2]db.LineItemStatus]bool{
 	{db.LineItemStatusPrDraft, db.LineItemStatusPrPending}:          true,
+	{db.LineItemStatusPrPending, db.LineItemStatusPrDraft}:          true,
 	{db.LineItemStatusPrPending, db.LineItemStatusPrApproved}:       true,
 	{db.LineItemStatusPrPending, db.LineItemStatusPrRejected}:       true,
 	{db.LineItemStatusPrApproved, db.LineItemStatusReimbDraft}:      true,
@@ -879,8 +864,7 @@ var terminalStatuses = []db.LineItemStatus{
 	db.LineItemStatusReimbRejected,
 }
 
-// TestCanTransitionExhaustive checks every ordered pair of statuses, so a new
-// edge cannot be added to the transition table without a matching change here.
+// adding an edge to the table also needs adding to legalEdges
 func TestCanTransitionExhaustive(t *testing.T) {
 	for _, from := range AllLineItemStatuses {
 		for _, to := range AllLineItemStatuses {
@@ -950,8 +934,7 @@ func TestIsTerminalRejectsUnknownStatus(t *testing.T) {
 	}
 }
 
-// TestNextStatesAgreesWithCanTransition guards against the two accessors
-// drifting apart.
+// NextLineItemStates and CanTransitionLineItem must agree
 func TestNextStatesAgreesWithCanTransition(t *testing.T) {
 	for _, from := range AllLineItemStatuses {
 		for _, to := range NextLineItemStates(from) {
@@ -965,8 +948,7 @@ func TestNextStatesAgreesWithCanTransition(t *testing.T) {
 	}
 }
 
-// TestNextStatesReturnsCopy ensures callers cannot corrupt the transition
-// table through the returned slice.
+// mutating the result must not change the table
 func TestNextStatesReturnsCopy(t *testing.T) {
 	const from = db.LineItemStatusPrPending
 
@@ -1008,9 +990,7 @@ func TestIsReimbursementPhase(t *testing.T) {
 	}
 }
 
-// TestAllStatusesCoversTransitionTable keeps AllLineItemStatuses honest: if a status is
-// added to the enum and the transition table but not to AllLineItemStatuses, the
-// exhaustive test above would silently stop covering it.
+// a status missing from AllLineItemStatuses would skip the exhaustive tests
 func TestAllStatusesCoversTransitionTable(t *testing.T) {
 	got, want := len(AllLineItemStatuses), len(lineItemTransitions)
 	if got != want {

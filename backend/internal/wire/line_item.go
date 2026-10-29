@@ -1,5 +1,4 @@
-// Wire up the line item repository, service and handler, and register its
-// routes.
+// builds repo -> service -> handler and registers the routes
 
 package wire
 

@@ -1,5 +1,4 @@
-// Postgres data access for line items. It mirrors the sqlc-generated queries
-// one for one and holds no rules of its own.
+// thin wrapper over sqlc queries, no rules here
 
 package repository
 
@@ -11,9 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// LineItemRepository is the data access the line item service needs. Keeping
-// it an interface is what lets the service rules be tested against an
-// in-memory fake with no database.
+// interface so service tests can use a fake
 type LineItemRepository interface {
 	GetLineItemByID(ctx context.Context, id int64) (db.LineItem, error)
 	GetLineItemsByPRID(ctx context.Context, prID int64) ([]db.LineItem, error)
@@ -37,8 +34,6 @@ type lineItemRepositoryImpl struct {
 	queries *db.Queries
 }
 
-// NewLineItemRepository returns a LineItemRepository backed by the given
-// queries, which are built with db.New(pool).
 func NewLineItemRepository(queries *db.Queries) LineItemRepository {
 	return &lineItemRepositoryImpl{queries: queries}
 }
@@ -85,10 +80,7 @@ func (r *lineItemRepositoryImpl) UpdateLineItem(
 	return r.queries.UpdateLineItem(ctx, arg)
 }
 
-// ArchiveLineItem soft deletes a row by clearing is_active, so a line item
-// referenced by a purchase request never vanishes from underneath it. The
-// service archives through UpdateLineItem instead; this is kept to mirror the
-// generated queries.
+// unused, service archives via UpdateLineItem
 func (r *lineItemRepositoryImpl) ArchiveLineItem(
 	ctx context.Context,
 	id int64,

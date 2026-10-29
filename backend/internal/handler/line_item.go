@@ -21,7 +21,7 @@ func NewLineItemHandler(svc service.LineItemService) *LineItemHandler {
 	return &LineItemHandler{service: svc}
 }
 
-// from the db
+// JSON shape, pgtype nulls become nil pointers, money in cents
 type LineItemResponse struct {
 	ID                     int64     `json:"id"`
 	PurchaseRequestID      int64     `json:"purchase_request_id"`
@@ -205,8 +205,7 @@ func (h *LineItemHandler) UpdateActuals(c *gin.Context) {
 	c.JSON(http.StatusOK, toLineItemResponse(item))
 }
 
-// AttachReimbursementRequest moves an approved line item into the
-// reimbursement phase.
+// moves an approved line item into the reimbursement phase
 func (h *LineItemHandler) AttachReimbursementRequest(c *gin.Context) {
 	id, ok := h.pathID(c, "id")
 	if !ok {
@@ -227,9 +226,7 @@ func (h *LineItemHandler) AttachReimbursementRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, toLineItemResponse(item))
 }
 
-// Transition moves a line item along the lifecycle. The statuses a given item
-// will accept are published as allowed_transitions on every response, so a
-// client does not have to encode the lifecycle itself.
+// valid next statuses are in allowed_transitions on every response
 func (h *LineItemHandler) Transition(c *gin.Context) {
 	id, ok := h.pathID(c, "id")
 	if !ok {
@@ -263,8 +260,7 @@ func (h *LineItemHandler) Archive(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// pathID reads a positive integer path parameter, answering 400 itself if it
-// is missing or malformed. The bool reports whether the caller should carry on.
+// writes the 400 itself, false = caller should return
 func (h *LineItemHandler) pathID(c *gin.Context, name string) (int64, bool) {
 	raw := c.Param(name)
 	id, err := strconv.ParseInt(raw, 10, 64)
@@ -277,7 +273,7 @@ func (h *LineItemHandler) pathID(c *gin.Context, name string) (int64, bool) {
 	return id, true
 }
 
-// bindJSON decodes the request body, answering 400 itself on malformed input.
+// writes the 400 itself on bad JSON
 func bindJSON(c *gin.Context, target any) bool {
 	if err := c.ShouldBindJSON(target); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -288,11 +284,7 @@ func bindJSON(c *gin.Context, target any) bool {
 	return true
 }
 
-// failLineItem maps a service error to a status code. It is the only place that
-// translation happens, so the handlers stay free of policy.
-//
-// Anything unrecognised is a 500 and its detail is withheld from the client,
-// but attached to the context so logging middleware can record it.
+// service error -> status code, unknown errors are a 500 with details hidden
 func failLineItem(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, service.ErrLineItemNotFound):
@@ -344,8 +336,7 @@ func toLineItemResponse(item db.LineItem) LineItemResponse {
 	return res
 }
 
-// toLineItemResponses always returns a non-nil slice, so an empty result marshals as
-// [] rather than null and clients can iterate it unconditionally.
+// non-nil so empty marshals as [] not null
 func toLineItemResponses(items []db.LineItem) []LineItemResponse {
 	out := make([]LineItemResponse, 0, len(items))
 	for _, item := range items {

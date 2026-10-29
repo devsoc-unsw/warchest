@@ -1,32 +1,3 @@
-// Line item business rules: the status lifecycle, the field mutability rules
-// that fall out of it, and input validation.
-//
-// This is the middle of three layers. It depends only on the
-// repository.LineItemRepository interface, so the rules here can be exercised
-// against a fake without a database or an HTTP server. repository/line_item.go
-// supplies the Postgres implementation and handler/line_item.go exposes these
-// methods over HTTP.
-//
-// All money values handled here are minor units (cents). Nothing
-// here converts between minor and major units; callers pass and receive cents.
-//
-// The three cost fields describe a purchase at different granularities. For
-// two bags of ten paper cups at $10 a bag:
-//
-//	quantity      = 2   (bags bought)
-//	cost per item = $10 (price of one bag)
-//	unit cost     = $1  (price of one cup)
-//
-// Quantity times cost per item gives the total. Unit cost is entered by the
-// user for reporting and cannot be derived from the other two, since the
-// number of cups in a bag is not recorded; it is therefore bounds checked but
-// never cross checked against them.
-//
-// Each field exists twice: the estimated_* values are what the requester
-// expects to spend, submitted with the purchase request, and the actual_*
-// values are what was really spent, submitted with the reimbursement request
-// once the goods have been bought.
-
 package service
 
 import (
@@ -42,34 +13,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Sentinel errors returned by the service. They exist so that the HTTP layer
-// can map failures to status codes with errors.Is, without inspecting strings
-// or knowing anything about the rules that produced them.
-//
-// Wrap them with fmt.Errorf("%w: detail", ErrX) to add context.
+// handler maps these to status codes via errors.Is
 var (
-	// ErrLineItemNotFound is returned when no line item exists for the given id.
-	// Maps to 404.
-	ErrLineItemNotFound = errors.New("line item not found")
-
-	// ErrInvalidLineItem is returned when input fails a bounds or presence check.
-	// Maps to 400.
-	ErrInvalidLineItem = errors.New("invalid line item")
-
-	// ErrInvalidLineItemTransition is returned when a status change is not a legal
-	// edge of the lifecycle. Maps to 409.
-	ErrInvalidLineItemTransition = errors.New("invalid status transition")
-
-	// ErrImmutableLineItemField is returned when a field is written in a status that
-	// does not permit editing it. Maps to 409.
-	ErrImmutableLineItemField = errors.New(
+	ErrLineItemNotFound          = errors.New("line item not found")       // 404
+	ErrInvalidLineItem           = errors.New("invalid line item")         // 400
+	ErrInvalidLineItemTransition = errors.New("invalid status transition") // 409
+	ErrImmutableLineItemField    = errors.New(                             // 409
 		"field is not editable in the current status",
 	)
 )
 
-// AllLineItemStatuses lists every status in lifecycle order. It is the authoritative
-// set for iterating the lifecycle (tests, and later the API surface that tells
-// the frontend which actions to render).
 var AllLineItemStatuses = []db.LineItemStatus{
 	db.LineItemStatusPrDraft,
 	db.LineItemStatusPrPending,
@@ -81,24 +34,19 @@ var AllLineItemStatuses = []db.LineItemStatus{
 	db.LineItemStatusReimbRejected,
 }
 
-// lineItemTransitions maps each status to the statuses it may legally move to.
-// It is held as data rather than as conditionals so that the legal next states
-// can be served to callers, not just enforced.
-//
-// A line item starts in pr_draft and is submitted for approval. Approval moves
-// it into the reimbursement phase, where the buyer records what was actually
-// spent and submits again. An entry with no outgoing edges is terminal.
+// status -> statuses it can move to, empty = terminal
 var lineItemTransitions = map[db.LineItemStatus][]db.LineItemStatus{
-	// Purchase request phase.
+	// purchase request phase
 	db.LineItemStatusPrDraft: {db.LineItemStatusPrPending},
 	db.LineItemStatusPrPending: {
+		db.LineItemStatusPrDraft, // soft reject, submitter can edit and resubmit
 		db.LineItemStatusPrApproved,
 		db.LineItemStatusPrRejected,
 	},
 	db.LineItemStatusPrApproved: {db.LineItemStatusReimbDraft},
 	db.LineItemStatusPrRejected: {},
 
-	// Reimbursement phase.
+	// reimbursement phase
 	db.LineItemStatusReimbDraft: {db.LineItemStatusReimbPending},
 	db.LineItemStatusReimbPending: {
 		db.LineItemStatusReimbApproved,
@@ -108,9 +56,6 @@ var lineItemTransitions = map[db.LineItemStatus][]db.LineItemStatus{
 	db.LineItemStatusReimbRejected: {},
 }
 
-// CanTransitionLineItem reports whether moving from one status to another is a legal
-// edge of the lifecycle. Unknown statuses have no edges, so they always
-// report false.
 func CanTransitionLineItem(from, to db.LineItemStatus) bool {
 	for _, next := range lineItemTransitions[from] {
 		if next == to {
@@ -120,9 +65,7 @@ func CanTransitionLineItem(from, to db.LineItemStatus) bool {
 	return false
 }
 
-// NextLineItemStates returns the statuses reachable from the given status. The result
-// is a copy, so callers cannot mutate the transition table through it. A
-// terminal or unknown status yields an empty slice.
+// returns a copy so callers can't mutate the table
 func NextLineItemStates(from db.LineItemStatus) []db.LineItemStatus {
 	next := lineItemTransitions[from]
 	out := make([]db.LineItemStatus, len(next))
@@ -130,16 +73,12 @@ func NextLineItemStates(from db.LineItemStatus) []db.LineItemStatus {
 	return out
 }
 
-// IsTerminalLineItemStatus reports whether the status is a known end state,
-// meaning nothing further can happen to the line item. Unknown statuses report
-// false: they are not terminal, they are invalid.
+// unknown statuses are invalid, not terminal
 func IsTerminalLineItemStatus(s db.LineItemStatus) bool {
 	next, known := lineItemTransitions[s]
 	return known && len(next) == 0
 }
 
-// IsLineItemReimbursementPhase reports whether the status belongs to the reimbursement
-// half of the lifecycle, which is where the actual_* fields become meaningful.
 func IsLineItemReimbursementPhase(s db.LineItemStatus) bool {
 	switch s {
 	case db.LineItemStatusReimbDraft,
@@ -152,15 +91,10 @@ func IsLineItemReimbursementPhase(s db.LineItemStatus) bool {
 	}
 }
 
-// maxLineItemDescriptionLen bounds the free text fields. The columns are unbounded
-// TEXT, so this is the service's own limit, there to stop a single request
-// carrying an unreasonable payload.
+// columns are unbounded TEXT
 const maxLineItemDescriptionLen = 1000
 
-// CreateLineItemInput is the data needed to open a new line item.
-//
-// Status is deliberately absent: a new line item takes the column default of
-// pr_draft, so no caller can create one that is already approved.
+// no Status: new items always start as pr_draft (column default)
 type CreateLineItemInput struct {
 	PurchaseRequestID    int64
 	EstimatedQuantity    int64
@@ -169,8 +103,6 @@ type CreateLineItemInput struct {
 	Description          string
 }
 
-// LineItemEstimatesInput updates the purchase request half of a line item: what the
-// requester expects to spend.
 type LineItemEstimatesInput struct {
 	EstimatedQuantity    int64
 	EstimatedCostPerItem int64
@@ -178,15 +110,7 @@ type LineItemEstimatesInput struct {
 	Description          string
 }
 
-// LineItemActualsInput records what was really spent, submitted with the
-// reimbursement request.
-//
-// Every field is optional, because a reimbursement draft is filled in as
-// receipts come in rather than in one go. A nil field leaves the stored value
-// untouched; that is deliberately different from LineItemEstimatesInput, where the
-// caller is editing a draft it already holds in full and sends every field.
-// Making the description optional too means an update of one number cannot
-// silently wipe the note attached to it.
+// all optional, nil = leave unchanged (filled in as receipts arrive)
 type LineItemActualsInput struct {
 	ActualQuantity    *int64
 	ActualCostPerItem *int64
@@ -194,19 +118,12 @@ type LineItemActualsInput struct {
 	Description       *string
 }
 
-// LineItemTotals is the summed cost of the active line items on a purchase request,
-// in cents. ActualTotal counts only items whose actuals have been recorded.
+// in cents, active items only
 type LineItemTotals struct {
 	EstimatedTotal int64
 	ActualTotal    int64
 }
 
-// LineItemService holds the line item business rules: the status lifecycle, the field
-// mutability rules that follow from it, and input validation.
-//
-// It takes and returns plain Go types. Converting to and from the pgtype
-// values the database layer needs happens here, so nothing above the service
-// has to know about pgx.
 type LineItemService interface {
 	Create(ctx context.Context, in CreateLineItemInput) (db.LineItem, error)
 	GetByID(ctx context.Context, id int64) (db.LineItem, error)
@@ -245,12 +162,10 @@ type lineItemServiceImpl struct {
 
 var _ LineItemService = (*lineItemServiceImpl)(nil)
 
-// NewLineItemService returns the line item service backed by the given repository.
 func NewLineItemService(repo repository.LineItemRepository) LineItemService {
 	return &lineItemServiceImpl{repo: repo}
 }
 
-// Create opens a line item against a purchase request, in pr_draft.
 func (s *lineItemServiceImpl) Create(
 	ctx context.Context,
 	in CreateLineItemInput,
@@ -283,8 +198,7 @@ func (s *lineItemServiceImpl) Create(
 	})
 }
 
-// GetByID returns one line item, including archived ones, translating a
-// missing row into ErrLineItemNotFound.
+// includes archived items
 func (s *lineItemServiceImpl) GetByID(
 	ctx context.Context,
 	id int64,
@@ -301,7 +215,6 @@ func (s *lineItemServiceImpl) GetByID(
 	return item, nil
 }
 
-// ListByPurchaseRequest returns the active line items on a purchase request.
 func (s *lineItemServiceImpl) ListByPurchaseRequest(
 	ctx context.Context,
 	prID int64,
@@ -309,8 +222,6 @@ func (s *lineItemServiceImpl) ListByPurchaseRequest(
 	return s.repo.GetLineItemsByPRID(ctx, prID)
 }
 
-// ListByReimbursementRequest returns the active line items attached to a
-// reimbursement request.
 func (s *lineItemServiceImpl) ListByReimbursementRequest(
 	ctx context.Context,
 	reimbID int64,
@@ -318,11 +229,7 @@ func (s *lineItemServiceImpl) ListByReimbursementRequest(
 	return s.repo.GetLineItemsByReimbID(ctx, int8From(&reimbID))
 }
 
-// TotalsByPurchaseRequest sums the active line items on a purchase request.
-//
-// An item contributes to ActualTotal only once both its actual quantity and
-// actual cost per item are recorded, so a half filled reimbursement draft does
-// not report a misleadingly small figure.
+// actual total only counts items with both actual quantity and cost set
 func (s *lineItemServiceImpl) TotalsByPurchaseRequest(
 	ctx context.Context,
 	prID int64,
@@ -343,11 +250,7 @@ func (s *lineItemServiceImpl) TotalsByPurchaseRequest(
 	return totals, nil
 }
 
-// UpdateEstimates revises what the requester expects to spend.
-//
-// Estimates are editable only while the line item is still a draft. Once it
-// has been submitted, the numbers an approver is looking at, or has already
-// approved, must not move underneath them.
+// only in pr_draft, so approvers never see numbers change under them
 func (s *lineItemServiceImpl) UpdateEstimates(
 	ctx context.Context,
 	id int64,
@@ -384,11 +287,7 @@ func (s *lineItemServiceImpl) UpdateEstimates(
 	return s.repo.UpdateLineItem(ctx, params)
 }
 
-// UpdateActuals records what was really spent.
-//
-// Actuals are writable only while the reimbursement is still a draft. Once
-// submitted they are frozen, for the same reason estimates freeze at
-// submission: a treasurer must be deciding on fixed numbers.
+// only in reimb_draft, frozen once submitted
 func (s *lineItemServiceImpl) UpdateActuals(
 	ctx context.Context,
 	id int64,
@@ -424,16 +323,7 @@ func (s *lineItemServiceImpl) UpdateActuals(
 	return s.repo.UpdateLineItem(ctx, params)
 }
 
-// AttachReimbursementRequest moves an approved line item into the
-// reimbursement phase, linking it to the reimbursement request that will carry
-// it.
-//
-// The attachment and the move to reimb_draft are one write: a line item that
-// pointed at a reimbursement request while still sitting in pr_approved, or
-// that reached reimb_draft attached to nothing, would be a state the rest of
-// the package does not expect. Whether the move is legal is asked of the
-// transition table rather than hardcoded here, so the lifecycle has one
-// definition.
+// links the reimbursement and moves to reimb_draft in one write
 func (s *lineItemServiceImpl) AttachReimbursementRequest(
 	ctx context.Context,
 	id, reimbID int64,
@@ -461,15 +351,7 @@ func (s *lineItemServiceImpl) AttachReimbursementRequest(
 	return s.repo.UpdateLineItem(ctx, params)
 }
 
-// Transition moves a line item along the lifecycle.
-//
-// Only edges in the transition table are permitted, so a line item cannot skip
-// approval, return from a terminal state, or jump between the two phases.
-//
-// TODO: this reads the current status and then writes, with nothing holding
-// the row in between. Two callers can both observe pr_draft and both write.
-// Closing that needs a status guarded UPDATE (... WHERE id = $1 AND status =
-// $2), which is a change to queries/line_items.sql and a regenerate.
+// TODO: race between read and write, needs UPDATE ... WHERE id = $1 AND status = $2
 func (s *lineItemServiceImpl) Transition(
 	ctx context.Context,
 	id int64,
@@ -501,9 +383,7 @@ func (s *lineItemServiceImpl) Transition(
 	return s.repo.UpdateLineItem(ctx, params)
 }
 
-// requireLineItemActuals refuses to submit a reimbursement that has not been filled
-// in. Without it an empty claim reaches a treasurer looking like a real one,
-// since the actual columns are nullable and default to nothing.
+// can't submit a reimbursement with empty actuals
 func requireLineItemActuals(item db.LineItem) error {
 	var missing []string
 	if !item.ActualQuantity.Valid {
@@ -524,13 +404,7 @@ func requireLineItemActuals(item db.LineItem) error {
 	return nil
 }
 
-// Archive removes a line item from view by clearing is_active.
-//
-// It is a soft delete: a line item cited by a purchase request must not vanish
-// from underneath it, so the row stays and the reads filter it out. The status
-// is left alone, since archiving is not a step in the lifecycle and an
-// archived item should still say where it had got to. Archiving an already
-// archived item is a no-op rather than an error.
+// soft delete, keeps status, archiving twice is a no-op
 func (s *lineItemServiceImpl) Archive(ctx context.Context, id int64) error {
 	item, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -546,12 +420,7 @@ func (s *lineItemServiceImpl) Archive(ctx context.Context, id int64) error {
 	return err
 }
 
-// validateLineItemAmounts bounds the quantity and money fields of one phase. kind
-// names that phase ("estimated" or "actual") so the error says which half of
-// the line item was rejected.
-//
-// Unit cost is checked for sign only: it cannot be reconciled against quantity
-// and cost per item, because the number of items in a pack is not stored.
+// kind is "estimated" or "actual", unit cost is sign checked only
 func validateLineItemAmounts(kind string, quantity, costPerItem, unitCost int64) error {
 	if quantity <= 0 {
 		return fmt.Errorf(
@@ -574,9 +443,7 @@ func validateLineItemAmounts(kind string, quantity, costPerItem, unitCost int64)
 	return nil
 }
 
-// validateLineItemActuals bounds whichever actual fields the caller supplied. Absent
-// fields are not defaulted to zero and then rejected: leaving a value unset is
-// how a reimbursement draft is filled in over time.
+// only checks fields that were sent
 func validateLineItemActuals(in LineItemActualsInput) error {
 	if in.ActualQuantity != nil && *in.ActualQuantity <= 0 {
 		return fmt.Errorf(
@@ -612,12 +479,7 @@ func validateLineItemDescription(description string) error {
 	return nil
 }
 
-// lineItemParamsFrom builds a full update parameter set from a loaded row.
-//
-// UpdateLineItem writes all twelve columns, so every mutating method has to
-// read the current row and write it back whole. Building the params in one
-// place is what keeps "change only what was asked for" a property of the
-// package rather than something each method has to remember.
+// UpdateLineItem writes every column, so start from the current row
 func lineItemParamsFrom(item db.LineItem) db.UpdateLineItemParams {
 	return db.UpdateLineItemParams{
 		ID:                     item.ID,
@@ -635,8 +497,7 @@ func lineItemParamsFrom(item db.LineItem) db.UpdateLineItemParams {
 	}
 }
 
-// textFrom maps a string to a nullable column, treating the empty string as
-// absent rather than as an empty description.
+// empty string -> NULL
 func textFrom(s string) pgtype.Text {
 	if s == "" {
 		return pgtype.Text{}
@@ -644,7 +505,6 @@ func textFrom(s string) pgtype.Text {
 	return pgtype.Text{String: s, Valid: true}
 }
 
-// int8From maps an optional integer to a nullable column.
 func int8From(v *int64) pgtype.Int8 {
 	if v == nil {
 		return pgtype.Int8{}
