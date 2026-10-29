@@ -287,7 +287,7 @@ SET
     is_active = $12,
     
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND updated_at = $13
 RETURNING id, estimated_quantity, estimated_cost_per_item, estimated_unit_cost, pr_description, actual_quantity, actual_cost_per_item, actual_unit_cost, reimb_description, reimbursement_request_id, purchase_request_id, status, is_active, created_at, updated_at
 `
 
@@ -304,8 +304,10 @@ type UpdateLineItemParams struct {
 	ReimbursementRequestID pgtype.Int8
 	Status                 LineItemStatus
 	IsActive               bool
+	UpdatedAt              pgtype.Timestamptz
 }
 
+// no row if anything changed since it was read
 func (q *Queries) UpdateLineItem(ctx context.Context, arg UpdateLineItemParams) (LineItem, error) {
 	row := q.db.QueryRow(ctx, updateLineItem,
 		arg.ID,
@@ -320,6 +322,7 @@ func (q *Queries) UpdateLineItem(ctx context.Context, arg UpdateLineItemParams) 
 		arg.ReimbursementRequestID,
 		arg.Status,
 		arg.IsActive,
+		arg.UpdatedAt,
 	)
 	var i LineItem
 	err := row.Scan(

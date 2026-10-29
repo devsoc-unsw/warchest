@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"backend/db"
 	"backend/internal/repository"
@@ -18,7 +19,13 @@ import (
 type fakeLineItemRepo struct {
 	items  map[int64]db.LineItem
 	nextID int64
+	clock  int64 // bumped on every write, stands in for updated_at = NOW()
 	err    error // when set, every method fails with it
+}
+
+func (f *fakeLineItemRepo) now() pgtype.Timestamptz {
+	f.clock++
+	return pgtype.Timestamptz{Time: time.Unix(f.clock, 0), Valid: true}
 }
 
 var _ repository.LineItemRepository = (*fakeLineItemRepo)(nil)
@@ -129,8 +136,9 @@ func (f *fakeLineItemRepo) UpdateLineItem(
 	if f.err != nil {
 		return db.LineItem{}, f.err
 	}
+	// mimics the WHERE updated_at = read version guard
 	item, ok := f.items[arg.ID]
-	if !ok {
+	if !ok || item.UpdatedAt != arg.UpdatedAt {
 		return db.LineItem{}, pgx.ErrNoRows
 	}
 	item.EstimatedQuantity = arg.EstimatedQuantity
@@ -144,6 +152,7 @@ func (f *fakeLineItemRepo) UpdateLineItem(
 	item.ReimbursementRequestID = arg.ReimbursementRequestID
 	item.Status = arg.Status
 	item.IsActive = arg.IsActive
+	item.UpdatedAt = f.now()
 	f.items[arg.ID] = item
 	return item, nil
 }
@@ -161,6 +170,7 @@ func (f *fakeLineItemRepo) TransitionLineItem(
 		return db.LineItem{}, pgx.ErrNoRows
 	}
 	item.Status = arg.ToStatus
+	item.UpdatedAt = f.now()
 	f.items[arg.ID] = item
 	return item, nil
 }
@@ -171,6 +181,7 @@ func (f *fakeLineItemRepo) ArchiveLineItem(_ context.Context, id int64) error {
 	}
 	if item, ok := f.items[id]; ok {
 		item.IsActive = false
+		item.UpdatedAt = f.now()
 		f.items[id] = item
 	}
 	return nil
@@ -466,6 +477,11 @@ func TestParamsFromRoundTripsEveryColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateLineItem returned %v, want nil", err)
 	}
+	if !written.UpdatedAt.Time.After(original.UpdatedAt.Time) {
+		t.Errorf("updated_at = %v, want it bumped past %v",
+			written.UpdatedAt.Time, original.UpdatedAt.Time)
+	}
+	written.UpdatedAt = original.UpdatedAt
 	if written != original {
 		t.Errorf("round trip changed the row:\n got %+v\nwant %+v", written, original)
 	}
@@ -831,6 +847,7 @@ func TestTransitionLeavesOtherFieldsAlone(t *testing.T) {
 	}
 
 	before.Status = db.LineItemStatusPrPending
+	before.UpdatedAt = after.UpdatedAt
 	if after != before {
 		t.Errorf("transition changed more than status:\n got %+v\nwant %+v",
 			after, before)
@@ -1054,5 +1071,73 @@ func TestTransitionLosesRaceReturnsConflict(t *testing.T) {
 	if got := fake.items[1].Status; got != db.LineItemStatusPrRejected {
 		t.Errorf("status = %q, want the other approver's %q to stand", got,
 			db.LineItemStatusPrRejected)
+	}
+}
+
+// someone submits the item between our read and our full-row write
+type racingUpdateRepo struct {
+	*fakeLineItemRepo
+	interleave db.LineItemStatus
+}
+
+func (r *racingUpdateRepo) UpdateLineItem(
+	ctx context.Context,
+	arg db.UpdateLineItemParams,
+) (db.LineItem, error) {
+	_, err := r.fakeLineItemRepo.TransitionLineItem(ctx, db.TransitionLineItemParams{
+		ID:         arg.ID,
+		FromStatus: r.items[arg.ID].Status,
+		ToStatus:   r.interleave,
+	})
+	if err != nil {
+		return db.LineItem{}, err
+	}
+	return r.fakeLineItemRepo.UpdateLineItem(ctx, arg)
+}
+
+func TestFullRowWritesLoseRaceReturnConflict(t *testing.T) {
+	tests := []struct {
+		name       string
+		start      db.LineItemStatus
+		interleave db.LineItemStatus
+		mutate     func(LineItemService) error
+	}{
+		{"UpdateEstimates", db.LineItemStatusPrDraft, db.LineItemStatusPrPending,
+			func(s LineItemService) error {
+				_, err := s.UpdateEstimates(context.Background(), 1, validEstimates())
+				return err
+			}},
+		{"UpdateActuals", db.LineItemStatusReimbDraft, db.LineItemStatusReimbPending,
+			func(s LineItemService) error {
+				_, err := s.UpdateActuals(context.Background(), 1,
+					LineItemActualsInput{ActualQuantity: p64(3)})
+				return err
+			}},
+		{"AttachReimbursementRequest", db.LineItemStatusPrApproved,
+			db.LineItemStatusReimbDraft,
+			func(s LineItemService) error {
+				_, err := s.AttachReimbursementRequest(context.Background(), 1, 42)
+				return err
+			}},
+		{"Archive", db.LineItemStatusPrPending, db.LineItemStatusPrApproved,
+			func(s LineItemService) error {
+				return s.Archive(context.Background(), 1)
+			}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := newFakeLineItemRepo()
+			seedItem(fake, tt.start)
+			svc := NewLineItemService(&racingUpdateRepo{fake, tt.interleave})
+
+			if err := tt.mutate(svc); !errors.Is(err, ErrLineItemConflict) {
+				t.Fatalf("returned %v, want ErrLineItemConflict", err)
+			}
+			got := fake.items[1]
+			if got.Status != tt.interleave || !got.IsActive {
+				t.Errorf("status = %q active = %v, want the concurrent %q to stand",
+					got.Status, got.IsActive, tt.interleave)
+			}
+		})
 	}
 }

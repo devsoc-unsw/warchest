@@ -292,7 +292,8 @@ func failLineItem(c *gin.Context, err error) {
 	case errors.Is(err, service.ErrInvalidLineItem):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, service.ErrInvalidLineItemTransition),
-		errors.Is(err, service.ErrImmutableLineItemField):
+		errors.Is(err, service.ErrImmutableLineItemField),
+		errors.Is(err, service.ErrLineItemConflict):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	default:
 		_ = c.Error(err)

@@ -49,7 +49,8 @@ SET
     is_active = $12,
     
     updated_at = NOW()
-WHERE id = $1
+-- no row if anything changed since it was read
+WHERE id = $1 AND updated_at = $13
 RETURNING *;
 
 -- name: ArchiveLineItem :exec

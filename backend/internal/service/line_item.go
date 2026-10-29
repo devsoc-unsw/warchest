@@ -21,6 +21,9 @@ var (
 	ErrImmutableLineItemField    = errors.New(                             // 409
 		"field is not editable in the current status",
 	)
+	ErrLineItemConflict = errors.New( // 409
+		"line item was modified concurrently",
+	)
 )
 
 var AllLineItemStatuses = []db.LineItemStatus{
@@ -285,7 +288,7 @@ func (s *lineItemServiceImpl) UpdateEstimates(
 	params.EstimatedCostPerItem = in.EstimatedCostPerItem
 	params.EstimatedUnitCost = in.EstimatedUnitCost
 	params.PrDescription = textFrom(in.Description)
-	return s.repo.UpdateLineItem(ctx, params)
+	return s.update(ctx, params)
 }
 
 // only in reimb_draft, frozen once submitted
@@ -321,7 +324,7 @@ func (s *lineItemServiceImpl) UpdateActuals(
 	if in.Description != nil {
 		params.ReimbDescription = textFrom(*in.Description)
 	}
-	return s.repo.UpdateLineItem(ctx, params)
+	return s.update(ctx, params)
 }
 
 // links the reimbursement and moves to reimb_draft in one write
@@ -350,7 +353,7 @@ func (s *lineItemServiceImpl) AttachReimbursementRequest(
 	params := lineItemParamsFrom(item)
 	params.ReimbursementRequestID = int8From(&reimbID)
 	params.Status = db.LineItemStatusReimbDraft
-	return s.repo.UpdateLineItem(ctx, params)
+	return s.update(ctx, params)
 }
 
 // checks on the read for clear errors, the guarded write catches concurrent changes
@@ -428,7 +431,7 @@ func (s *lineItemServiceImpl) Archive(ctx context.Context, id int64) error {
 
 	params := lineItemParamsFrom(item)
 	params.IsActive = false
-	_, err = s.repo.UpdateLineItem(ctx, params)
+	_, err = s.update(ctx, params)
 	return err
 }
 
@@ -491,7 +494,8 @@ func validateLineItemDescription(description string) error {
 	return nil
 }
 
-// UpdateLineItem writes every column, so start from the current row
+// UpdateLineItem writes every column, so start from the current row.
+// UpdatedAt is the read version the write is guarded on
 func lineItemParamsFrom(item db.LineItem) db.UpdateLineItemParams {
 	return db.UpdateLineItemParams{
 		ID:                     item.ID,
@@ -506,7 +510,23 @@ func lineItemParamsFrom(item db.LineItem) db.UpdateLineItemParams {
 		ReimbursementRequestID: item.ReimbursementRequestID,
 		Status:                 item.Status,
 		IsActive:               item.IsActive,
+		UpdatedAt:              item.UpdatedAt,
 	}
+}
+
+// guarded on updated_at, no row = someone wrote it after our read
+func (s *lineItemServiceImpl) update(
+	ctx context.Context,
+	params db.UpdateLineItemParams,
+) (db.LineItem, error) {
+	updated, err := s.repo.UpdateLineItem(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: line item %d changed since it was read, reload and retry",
+			ErrLineItemConflict, params.ID,
+		)
+	}
+	return updated, err
 }
 
 // empty string -> NULL
