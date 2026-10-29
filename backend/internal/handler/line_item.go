@@ -83,7 +83,7 @@ type lineItemAttachRequest struct {
 }
 
 // CreateLineItem opens a line item on a purchase request.
-func (h *LineItemHandler) CreateLineItem(c *gin.Context) {
+func (h *LineItemHandler) Create(c *gin.Context) {
 	prID, ok := h.pathID(c, "prID")
 	if !ok {
 		return
