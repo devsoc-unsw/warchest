@@ -229,6 +229,45 @@ func (q *Queries) ListLineItems(ctx context.Context, limit int32) ([]LineItem, e
 	return items, nil
 }
 
+const transitionLineItem = `-- name: TransitionLineItem :one
+UPDATE line_items
+SET
+    status = $1,
+    updated_at = NOW()
+WHERE id = $2 AND status = $3 AND is_active
+RETURNING id, estimated_quantity, estimated_cost_per_item, estimated_unit_cost, pr_description, actual_quantity, actual_cost_per_item, actual_unit_cost, reimb_description, reimbursement_request_id, purchase_request_id, status, is_active, created_at, updated_at
+`
+
+type TransitionLineItemParams struct {
+	ToStatus   LineItemStatus
+	ID         int64
+	FromStatus LineItemStatus
+}
+
+// no row if status changed since it was read
+func (q *Queries) TransitionLineItem(ctx context.Context, arg TransitionLineItemParams) (LineItem, error) {
+	row := q.db.QueryRow(ctx, transitionLineItem, arg.ToStatus, arg.ID, arg.FromStatus)
+	var i LineItem
+	err := row.Scan(
+		&i.ID,
+		&i.EstimatedQuantity,
+		&i.EstimatedCostPerItem,
+		&i.EstimatedUnitCost,
+		&i.PrDescription,
+		&i.ActualQuantity,
+		&i.ActualCostPerItem,
+		&i.ActualUnitCost,
+		&i.ReimbDescription,
+		&i.ReimbursementRequestID,
+		&i.PurchaseRequestID,
+		&i.Status,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateLineItem = `-- name: UpdateLineItem :one
 UPDATE line_items
 SET 

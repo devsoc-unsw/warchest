@@ -27,6 +27,10 @@ type LineItemRepository interface {
 		ctx context.Context,
 		arg db.UpdateLineItemParams,
 	) (db.LineItem, error)
+	TransitionLineItem(
+		ctx context.Context,
+		arg db.TransitionLineItemParams,
+	) (db.LineItem, error)
 	ArchiveLineItem(ctx context.Context, id int64) error
 }
 
@@ -86,4 +90,11 @@ func (r *lineItemRepositoryImpl) ArchiveLineItem(
 	id int64,
 ) error {
 	return r.queries.ArchiveLineItem(ctx, id)
+}
+
+func (r *lineItemRepositoryImpl) TransitionLineItem(
+	ctx context.Context,
+	arg db.TransitionLineItemParams,
+) (db.LineItem, error) {
+	return r.queries.TransitionLineItem(ctx, arg)
 }

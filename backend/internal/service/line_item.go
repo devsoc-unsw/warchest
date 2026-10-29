@@ -353,7 +353,7 @@ func (s *lineItemServiceImpl) AttachReimbursementRequest(
 	return s.repo.UpdateLineItem(ctx, params)
 }
 
-// TODO: race between read and write, needs UPDATE ... WHERE id = $1 AND status = $2
+// checks on the read for clear errors, the guarded write catches concurrent changes
 func (s *lineItemServiceImpl) Transition(
 	ctx context.Context,
 	id int64,
@@ -380,9 +380,19 @@ func (s *lineItemServiceImpl) Transition(
 		}
 	}
 
-	params := lineItemParamsFrom(item)
-	params.Status = to
-	return s.repo.UpdateLineItem(ctx, params)
+	updated, err := s.repo.TransitionLineItem(ctx, db.TransitionLineItemParams{
+		ID:         id,
+		FromStatus: item.Status,
+		ToStatus:   to,
+	})
+	// no row = someone changed or archived it after our read
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: line item %d changed while moving from %q to %q, reload and retry",
+			ErrInvalidLineItemTransition, id, item.Status, to,
+		)
+	}
+	return updated, err
 }
 
 // can't submit a reimbursement with empty actuals

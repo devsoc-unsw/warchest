@@ -148,6 +148,23 @@ func (f *fakeLineItemRepo) UpdateLineItem(
 	return item, nil
 }
 
+// mimics the WHERE status = from_status AND is_active guard
+func (f *fakeLineItemRepo) TransitionLineItem(
+	_ context.Context,
+	arg db.TransitionLineItemParams,
+) (db.LineItem, error) {
+	if f.err != nil {
+		return db.LineItem{}, f.err
+	}
+	item, ok := f.items[arg.ID]
+	if !ok || item.Status != arg.FromStatus || !item.IsActive {
+		return db.LineItem{}, pgx.ErrNoRows
+	}
+	item.Status = arg.ToStatus
+	f.items[arg.ID] = item
+	return item, nil
+}
+
 func (f *fakeLineItemRepo) ArchiveLineItem(_ context.Context, id int64) error {
 	if f.err != nil {
 		return f.err
@@ -1005,5 +1022,37 @@ func TestAllStatusesCoversTransitionTable(t *testing.T) {
 		if _, ok := lineItemTransitions[s]; !ok {
 			t.Errorf("status %q in AllLineItemStatuses but not in transition table", s)
 		}
+	}
+}
+
+// another approver acts between our read and our write
+type racingLineItemRepo struct {
+	*fakeLineItemRepo
+	interleave db.LineItemStatus
+}
+
+func (r *racingLineItemRepo) TransitionLineItem(
+	ctx context.Context,
+	arg db.TransitionLineItemParams,
+) (db.LineItem, error) {
+	item := r.items[arg.ID]
+	item.Status = r.interleave
+	r.items[arg.ID] = item
+	return r.fakeLineItemRepo.TransitionLineItem(ctx, arg)
+}
+
+func TestTransitionLosesRaceReturnsConflict(t *testing.T) {
+	fake := newFakeLineItemRepo()
+	seedItem(fake, db.LineItemStatusPrPending)
+	repo := &racingLineItemRepo{fake, db.LineItemStatusPrRejected}
+
+	svc := NewLineItemService(repo)
+	_, err := svc.Transition(context.Background(), 1, db.LineItemStatusPrApproved)
+	if !errors.Is(err, ErrInvalidLineItemTransition) {
+		t.Fatalf("Transition returned %v, want ErrInvalidLineItemTransition", err)
+	}
+	if got := fake.items[1].Status; got != db.LineItemStatusPrRejected {
+		t.Errorf("status = %q, want the other approver's %q to stand", got,
+			db.LineItemStatusPrRejected)
 	}
 }

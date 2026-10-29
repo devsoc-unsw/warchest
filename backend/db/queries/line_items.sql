@@ -58,3 +58,12 @@ SET
     is_active = FALSE,
     updated_at = NOW()
 WHERE id = $1;
+
+-- name: TransitionLineItem :one
+-- no row if status changed since it was read
+UPDATE line_items
+SET
+    status = @to_status,
+    updated_at = NOW()
+WHERE id = @id AND status = @from_status AND is_active
+RETURNING *;
