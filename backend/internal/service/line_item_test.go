@@ -854,6 +854,7 @@ var legalEdges = map[[2]db.LineItemStatus]bool{
 	{db.LineItemStatusPrPending, db.LineItemStatusPrRejected}:       true,
 	{db.LineItemStatusPrApproved, db.LineItemStatusReimbDraft}:      true,
 	{db.LineItemStatusReimbDraft, db.LineItemStatusReimbPending}:    true,
+	{db.LineItemStatusReimbPending, db.LineItemStatusReimbDraft}:    true,
 	{db.LineItemStatusReimbPending, db.LineItemStatusReimbApproved}: true,
 	{db.LineItemStatusReimbPending, db.LineItemStatusReimbRejected}: true,
 }

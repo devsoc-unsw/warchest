@@ -49,6 +49,7 @@ var lineItemTransitions = map[db.LineItemStatus][]db.LineItemStatus{
 	// reimbursement phase
 	db.LineItemStatusReimbDraft: {db.LineItemStatusReimbPending},
 	db.LineItemStatusReimbPending: {
+		db.LineItemStatusReimbDraft, // soft reject, submitter can edit and resubmit
 		db.LineItemStatusReimbApproved,
 		db.LineItemStatusReimbRejected,
 	},
@@ -338,7 +339,8 @@ func (s *lineItemServiceImpl) AttachReimbursementRequest(
 	if err != nil {
 		return db.LineItem{}, err
 	}
-	if !CanTransitionLineItem(item.Status, db.LineItemStatusReimbDraft) {
+	// only pr_approved. reimb_pending -> reimb_draft is a soft reject, not a reattach
+	if item.Status != db.LineItemStatusPrApproved {
 		return db.LineItem{}, fmt.Errorf(
 			"%w: line item %d is %q, cannot enter the reimbursement phase",
 			ErrInvalidLineItemTransition, id, item.Status,
