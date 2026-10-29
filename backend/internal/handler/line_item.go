@@ -17,8 +17,8 @@ type LineItemHandler struct {
 	service service.LineItemService
 }
 
-func NewLineItemHandler(service service.LineItemService) *LineItemHandler {
-	return &LineItemHandler{service: service}
+func NewLineItemHandler(svc service.LineItemService) *LineItemHandler {
+	return &LineItemHandler{service: svc}
 }
 
 // from the db
