@@ -82,7 +82,7 @@ type lineItemAttachRequest struct {
 	ReimbursementRequestID int64 `json:"reimbursement_request_id"`
 }
 
-// Create opens a line item on a purchase request.
+// CreateLineItem opens a line item on a purchase request.
 func (h *LineItemHandler) CreateLineItem(c *gin.Context) {
 	prID, ok := h.pathID(c, "prID")
 	if !ok {

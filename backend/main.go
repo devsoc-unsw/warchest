@@ -25,7 +25,7 @@ func main() {
 	// Gin HTTP router
 	router := gin.Default()
 
-	// each module wires it own
+	// each module wires its own
 	wire.WireEvent(queries, router)
 	wire.WireLineItem(queries, router)
 
