@@ -23,27 +23,27 @@ func NewLineItemHandler(svc service.LineItemService) *LineItemHandler {
 
 // JSON shape, pgtype nulls become nil pointers, money in cents
 type LineItemResponse struct {
-	ID                     int64     `json:"id"`
-	PurchaseRequestID      int64     `json:"purchase_request_id"`
-	ReimbursementRequestID *int64    `json:"reimbursement_request_id"`
-	Status                 string    `json:"status"`
-	AllowedTransitions     []string  `json:"allowed_transitions"`
-	IsActive               bool      `json:"is_active"`
+	ID                     int64    `json:"id"`
+	PurchaseRequestID      int64    `json:"purchase_request_id"`
+	ReimbursementRequestID *int64   `json:"reimbursement_request_id"`
+	Status                 string   `json:"status"`
+	AllowedTransitions     []string `json:"allowed_transitions"`
+	IsActive               bool     `json:"is_active"`
 
-	EstimatedQuantity      int64     `json:"estimated_quantity"`
-	EstimatedCostPerItem   int64     `json:"estimated_cost_per_item"`
-	EstimatedUnitCost      int64     `json:"estimated_unit_cost"`
-	EstimatedTotal         int64     `json:"estimated_total"`
-	PrDescription          *string   `json:"pr_description"`
+	EstimatedQuantity    int64   `json:"estimated_quantity"`
+	EstimatedCostPerItem int64   `json:"estimated_cost_per_item"`
+	EstimatedUnitCost    int64   `json:"estimated_unit_cost"`
+	EstimatedTotal       int64   `json:"estimated_total"`
+	PrDescription        *string `json:"pr_description"`
 
-	ActualQuantity         *int64    `json:"actual_quantity"`
-	ActualCostPerItem      *int64    `json:"actual_cost_per_item"`
-	ActualUnitCost         *int64    `json:"actual_unit_cost"`
-	ActualTotal            *int64    `json:"actual_total"`
-	ReimbDescription       *string   `json:"reimb_description"`
+	ActualQuantity    *int64  `json:"actual_quantity"`
+	ActualCostPerItem *int64  `json:"actual_cost_per_item"`
+	ActualUnitCost    *int64  `json:"actual_unit_cost"`
+	ActualTotal       *int64  `json:"actual_total"`
+	ReimbDescription  *string `json:"reimb_description"`
 
-	CreatedAt              time.Time `json:"created_at"`
-	UpdatedAt              time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type LineItemTotalsResponse struct {

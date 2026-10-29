@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 func RegisterLineItemRoutes(r gin.IRouter, h *handler.LineItemHandler) {
 	purchaseRequests := r.Group("/purchase-requests/:prID/line-items")
 	{

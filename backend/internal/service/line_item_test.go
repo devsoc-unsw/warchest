@@ -1077,7 +1077,7 @@ func (r *racingUpdateRepo) UpdateLineItem(
 	ctx context.Context,
 	arg db.UpdateLineItemParams,
 ) (db.LineItem, error) {
-	_, err := r.fakeLineItemRepo.TransitionLineItem(ctx, db.TransitionLineItemParams{
+	_, err := r.TransitionLineItem(ctx, db.TransitionLineItemParams{
 		ID:         arg.ID,
 		FromStatus: r.items[arg.ID].Status,
 		ToStatus:   r.interleave,
@@ -1156,7 +1156,8 @@ func TestTransitionSoftRejectKeepsReimbursementRequest(t *testing.T) {
 		t.Fatalf("Transition returned %v, want nil", err)
 	}
 	if got.ReimbursementRequestID != i8(42) {
-		t.Errorf("reimbursement request = %+v, want it kept", got.ReimbursementRequestID)
+		t.Errorf("reimbursement request = %+v, want it kept",
+			got.ReimbursementRequestID)
 	}
 }
 
@@ -1253,8 +1254,10 @@ func TestActualsAreBounded(t *testing.T) {
 	} {
 		_, err := svc.UpdateActuals(context.Background(), 1, in)
 		if !errors.Is(err, ErrInvalidLineItem) {
-			t.Errorf("%s over limit: UpdateActuals returned %v, want ErrInvalidLineItem",
-				name, err)
+			t.Errorf(
+				"%s over limit: UpdateActuals returned %v, want ErrInvalidLineItem",
+				name, err,
+			)
 		}
 	}
 }
@@ -1262,8 +1265,11 @@ func TestActualsAreBounded(t *testing.T) {
 // what the response offers must be exactly what Transition accepts
 func TestAllowedTransitionsAgreesWithTransition(t *testing.T) {
 	variants := map[string]func(db.LineItem) db.LineItem{
-		"active":   func(item db.LineItem) db.LineItem { return item },
-		"archived": func(item db.LineItem) db.LineItem { item.IsActive = false; return item },
+		"active": func(item db.LineItem) db.LineItem { return item },
+		"archived": func(item db.LineItem) db.LineItem {
+			item.IsActive = false
+			return item
+		},
 		"no reimbursement request": func(item db.LineItem) db.LineItem {
 			item.ReimbursementRequestID = pgtype.Int8{}
 			return item
