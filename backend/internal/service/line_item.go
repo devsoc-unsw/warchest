@@ -377,6 +377,14 @@ func (s *lineItemServiceImpl) Transition(
 			ErrInvalidLineItemTransition, id, item.Status, to,
 		)
 	}
+	// pr_approved -> reimb_draft goes through AttachReimbursementRequest,
+	// which sets the reimbursement id in the same write
+	if IsLineItemReimbursementPhase(to) && !item.ReimbursementRequestID.Valid {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: line item %d has no reimbursement request, attach one to move to %q",
+			ErrInvalidLineItemTransition, id, to,
+		)
+	}
 	if to == db.LineItemStatusReimbPending {
 		if err = requireLineItemActuals(item); err != nil {
 			return db.LineItem{}, err

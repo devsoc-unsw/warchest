@@ -498,6 +498,10 @@ func seedItem(repo *fakeLineItemRepo, status db.LineItemStatus) db.LineItem {
 		PrDescription: pgtype.Text{String: "cups", Valid: true},
 		Status:        status,
 	}
+	// reimbursement phase items always have one, AttachReimbursementRequest sets it
+	if IsLineItemReimbursementPhase(status) {
+		item.ReimbursementRequestID = i8(42)
+	}
 	repo.seed(item)
 	return item
 }
@@ -754,7 +758,10 @@ func TestTransitionAllowsExactlyTheLegalEdges(t *testing.T) {
 
 				_, err := NewLineItemService(repo).
 					Transition(context.Background(), 1, to)
-				if !CanTransitionLineItem(from, to) {
+				// legal edge, but only via AttachReimbursementRequest
+				enteringReimb := from == db.LineItemStatusPrApproved &&
+					to == db.LineItemStatusReimbDraft
+				if !CanTransitionLineItem(from, to) || enteringReimb {
 					if !errors.Is(err, ErrInvalidLineItemTransition) {
 						t.Fatalf("returned %v, want ErrInvalidLineItemTransition", err)
 					}
@@ -1139,5 +1146,34 @@ func TestFullRowWritesLoseRaceReturnConflict(t *testing.T) {
 					got.Status, got.IsActive, tt.interleave)
 			}
 		})
+	}
+}
+
+func TestTransitionCannotEnterReimbursementWithoutRequest(t *testing.T) {
+	repo := newFakeLineItemRepo()
+	seedItem(repo, db.LineItemStatusPrApproved)
+
+	_, err := NewLineItemService(repo).
+		Transition(context.Background(), 1, db.LineItemStatusReimbDraft)
+	if !errors.Is(err, ErrInvalidLineItemTransition) {
+		t.Fatalf("Transition returned %v, want ErrInvalidLineItemTransition", err)
+	}
+	if got := repo.items[1]; got.Status != db.LineItemStatusPrApproved {
+		t.Errorf("status = %q, want it left at %q", got.Status,
+			db.LineItemStatusPrApproved)
+	}
+}
+
+func TestTransitionSoftRejectKeepsReimbursementRequest(t *testing.T) {
+	repo := newFakeLineItemRepo()
+	seedItem(repo, db.LineItemStatusReimbPending)
+
+	got, err := NewLineItemService(repo).
+		Transition(context.Background(), 1, db.LineItemStatusReimbDraft)
+	if err != nil {
+		t.Fatalf("Transition returned %v, want nil", err)
+	}
+	if got.ReimbursementRequestID != i8(42) {
+		t.Errorf("reimbursement request = %+v, want it kept", got.ReimbursementRequestID)
 	}
 }
