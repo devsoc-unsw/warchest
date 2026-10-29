@@ -12,11 +12,6 @@ SELECT * FROM line_items
 WHERE reimbursement_request_ID = $1 AND is_active
 ORDER BY ID;
 
--- name: ListLineItems :many
-SELECT * FROM line_items
-ORDER BY id
-LIMIT $1;
-
 -- name: CreateLineItem :one
 INSERT INTO line_items (
     estimated_quantity, 

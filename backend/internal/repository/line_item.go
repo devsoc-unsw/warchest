@@ -18,7 +18,6 @@ type LineItemRepository interface {
 		ctx context.Context,
 		reimbID pgtype.Int8,
 	) ([]db.LineItem, error)
-	ListLineItems(ctx context.Context, limit int32) ([]db.LineItem, error)
 	CreateLineItem(
 		ctx context.Context,
 		arg db.CreateLineItemParams,
@@ -63,13 +62,6 @@ func (r *lineItemRepositoryImpl) GetLineItemsByReimbID(
 	return r.queries.GetLineItemsByReimbID(ctx, reimbID)
 }
 
-func (r *lineItemRepositoryImpl) ListLineItems(
-	ctx context.Context,
-	limit int32,
-) ([]db.LineItem, error) {
-	return r.queries.ListLineItems(ctx, limit)
-}
-
 func (r *lineItemRepositoryImpl) CreateLineItem(
 	ctx context.Context,
 	arg db.CreateLineItemParams,
@@ -84,7 +76,6 @@ func (r *lineItemRepositoryImpl) UpdateLineItem(
 	return r.queries.UpdateLineItem(ctx, arg)
 }
 
-// unused, service archives via UpdateLineItem
 func (r *lineItemRepositoryImpl) ArchiveLineItem(
 	ctx context.Context,
 	id int64,

@@ -115,20 +115,6 @@ func (f *fakeLineItemRepo) GetLineItemsByReimbID(
 	}), nil
 }
 
-func (f *fakeLineItemRepo) ListLineItems(
-	_ context.Context,
-	limit int32,
-) ([]db.LineItem, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	all := f.sorted(func(db.LineItem) bool { return true })
-	if int(limit) < len(all) {
-		all = all[:limit]
-	}
-	return all, nil
-}
-
 func (f *fakeLineItemRepo) UpdateLineItem(
 	_ context.Context,
 	arg db.UpdateLineItemParams,
@@ -1126,10 +1112,6 @@ func TestFullRowWritesLoseRaceReturnConflict(t *testing.T) {
 				_, err := s.AttachReimbursementRequest(context.Background(), 1, 42)
 				return err
 			}},
-		{"Archive", db.LineItemStatusPrPending, db.LineItemStatusPrApproved,
-			func(s LineItemService) error {
-				return s.Archive(context.Background(), 1)
-			}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1218,5 +1200,61 @@ func TestMutationsOnArchivedItemAreRejected(t *testing.T) {
 					repo.items[1], item)
 			}
 		})
+	}
+}
+
+func TestTransitionToUnknownStatusIsInvalidInput(t *testing.T) {
+	repo := newFakeLineItemRepo()
+	seedItem(repo, db.LineItemStatusPrPending)
+
+	_, err := NewLineItemService(repo).
+		Transition(context.Background(), 1, "pr_aproved")
+	if !errors.Is(err, ErrInvalidLineItem) {
+		t.Fatalf("Transition returned %v, want ErrInvalidLineItem", err)
+	}
+}
+
+func TestAmountsAreBounded(t *testing.T) {
+	svc := NewLineItemService(newFakeLineItemRepo())
+	ctx := context.Background()
+
+	tooMany := validCreate()
+	tooMany.EstimatedQuantity = maxLineItemQuantity + 1
+	tooDear := validCreate()
+	tooDear.EstimatedCostPerItem = maxLineItemCents + 1
+	tooDearUnit := validCreate()
+	tooDearUnit.EstimatedUnitCost = maxLineItemCents + 1
+	atLimit := validCreate()
+	atLimit.EstimatedQuantity = maxLineItemQuantity
+	atLimit.EstimatedCostPerItem = maxLineItemCents
+
+	for name, in := range map[string]CreateLineItemInput{
+		"quantity": tooMany, "cost per item": tooDear, "unit cost": tooDearUnit,
+	} {
+		if _, err := svc.Create(ctx, in); !errors.Is(err, ErrInvalidLineItem) {
+			t.Errorf("%s over limit: Create returned %v, want ErrInvalidLineItem",
+				name, err)
+		}
+	}
+	if _, err := svc.Create(ctx, atLimit); err != nil {
+		t.Errorf("at limit: Create returned %v, want nil", err)
+	}
+}
+
+func TestActualsAreBounded(t *testing.T) {
+	repo := newFakeLineItemRepo()
+	seedItem(repo, db.LineItemStatusReimbDraft)
+	svc := NewLineItemService(repo)
+
+	for name, in := range map[string]LineItemActualsInput{
+		"quantity":      {ActualQuantity: p64(maxLineItemQuantity + 1)},
+		"cost per item": {ActualCostPerItem: p64(maxLineItemCents + 1)},
+		"unit cost":     {ActualUnitCost: p64(maxLineItemCents + 1)},
+	} {
+		_, err := svc.UpdateActuals(context.Background(), 1, in)
+		if !errors.Is(err, ErrInvalidLineItem) {
+			t.Errorf("%s over limit: UpdateActuals returned %v, want ErrInvalidLineItem",
+				name, err)
+		}
 	}
 }

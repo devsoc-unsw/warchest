@@ -39,6 +39,12 @@ CREATE TABLE line_items (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- partial, the list queries only read active items
+CREATE INDEX line_items_purchase_request_id_idx
+    ON line_items (purchase_request_ID) WHERE is_active;
+CREATE INDEX line_items_reimbursement_request_id_idx
+    ON line_items (reimbursement_request_ID) WHERE is_active;
+
 -- +goose Down
 DROP TABLE line_items;
 DROP TYPE line_item_status;

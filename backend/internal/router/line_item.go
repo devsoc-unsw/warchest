@@ -25,7 +25,7 @@ func RegisterLineItemRoutes(r gin.IRouter, h *handler.LineItemHandler) {
 	lineItems := r.Group("/line-items")
 	{
 		lineItems.GET("/:id", h.GetByID)
-		lineItems.PATCH("/:id/estimates", h.UpdateEstimates)
+		lineItems.PUT("/:id/estimates", h.UpdateEstimates)
 		lineItems.PATCH("/:id/actuals", h.UpdateActuals)
 		lineItems.POST("/:id/reimbursement", h.AttachReimbursementRequest)
 		lineItems.POST("/:id/transition", h.Transition)

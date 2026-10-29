@@ -51,14 +51,7 @@ type LineItemTotalsResponse struct {
 	ActualTotal    int64 `json:"actual_total"`
 }
 
-type createLineItemRequest struct {
-	EstimatedQuantity    int64  `json:"estimated_quantity"`
-	EstimatedCostPerItem int64  `json:"estimated_cost_per_item"`
-	EstimatedUnitCost    int64  `json:"estimated_unit_cost"`
-	Description          string `json:"description"`
-}
-
-
+// body for both create and update estimates
 type lineItemEstimatesRequest struct {
 	EstimatedQuantity    int64  `json:"estimated_quantity"`
 	EstimatedCostPerItem int64  `json:"estimated_cost_per_item"`
@@ -88,7 +81,7 @@ func (h *LineItemHandler) Create(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req createLineItemRequest
+	var req lineItemEstimatesRequest
 	if !bindJSON(c, &req) {
 		return
 	}
@@ -163,7 +156,7 @@ func (h *LineItemHandler) Totals(c *gin.Context) {
 	c.JSON(http.StatusOK, LineItemTotalsResponse(totals))
 }
 
-// UpdateEstimates revises what the requester expects to spend.
+// UpdateEstimates replaces every estimate field, omitted ones become zero/empty.
 func (h *LineItemHandler) UpdateEstimates(c *gin.Context) {
 	id, ok := h.pathID(c, "id")
 	if !ok {
@@ -319,7 +312,7 @@ func toLineItemResponse(item db.LineItem) LineItemResponse {
 		EstimatedQuantity:    item.EstimatedQuantity,
 		EstimatedCostPerItem: item.EstimatedCostPerItem,
 		EstimatedUnitCost:    item.EstimatedUnitCost,
-		EstimatedTotal:       item.EstimatedQuantity * item.EstimatedCostPerItem,
+		EstimatedTotal:       service.LineItemEstimatedTotal(item),
 		PrDescription:        nullText(item.PrDescription),
 
 		ActualQuantity:    nullInt(item.ActualQuantity),
@@ -330,8 +323,7 @@ func toLineItemResponse(item db.LineItem) LineItemResponse {
 		CreatedAt: item.CreatedAt.Time,
 		UpdatedAt: item.UpdatedAt.Time,
 	}
-	if item.ActualQuantity.Valid && item.ActualCostPerItem.Valid {
-		total := item.ActualQuantity.Int64 * item.ActualCostPerItem.Int64
+	if total, ok := service.LineItemActualTotal(item); ok {
 		res.ActualTotal = &total
 	}
 	return res

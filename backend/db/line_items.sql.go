@@ -187,48 +187,6 @@ func (q *Queries) GetLineItemsByReimbID(ctx context.Context, reimbursementReques
 	return items, nil
 }
 
-const listLineItems = `-- name: ListLineItems :many
-SELECT id, estimated_quantity, estimated_cost_per_item, estimated_unit_cost, pr_description, actual_quantity, actual_cost_per_item, actual_unit_cost, reimb_description, reimbursement_request_id, purchase_request_id, status, is_active, created_at, updated_at FROM line_items
-ORDER BY id
-LIMIT $1
-`
-
-func (q *Queries) ListLineItems(ctx context.Context, limit int32) ([]LineItem, error) {
-	rows, err := q.db.Query(ctx, listLineItems, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []LineItem
-	for rows.Next() {
-		var i LineItem
-		if err := rows.Scan(
-			&i.ID,
-			&i.EstimatedQuantity,
-			&i.EstimatedCostPerItem,
-			&i.EstimatedUnitCost,
-			&i.PrDescription,
-			&i.ActualQuantity,
-			&i.ActualCostPerItem,
-			&i.ActualUnitCost,
-			&i.ReimbDescription,
-			&i.ReimbursementRequestID,
-			&i.PurchaseRequestID,
-			&i.Status,
-			&i.IsActive,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const transitionLineItem = `-- name: TransitionLineItem :one
 UPDATE line_items
 SET

@@ -98,6 +98,12 @@ func IsLineItemReimbursementPhase(s db.LineItemStatus) bool {
 // columns are unbounded TEXT
 const maxLineItemDescriptionLen = 1000
 
+// keeps quantity * cost, and sums of thousands of those, inside int64
+const (
+	maxLineItemQuantity = 1_000_000
+	maxLineItemCents    = 1_000_000_000 // $10M
+)
+
 // no Status: new items always start as pr_draft (column default)
 type CreateLineItemInput struct {
 	PurchaseRequestID    int64
@@ -263,13 +269,25 @@ func (s *lineItemServiceImpl) TotalsByPurchaseRequest(
 
 	var totals LineItemTotals
 	for _, item := range items {
-		totals.EstimatedTotal += item.EstimatedQuantity * item.EstimatedCostPerItem
-		if item.ActualQuantity.Valid && item.ActualCostPerItem.Valid {
-			totals.ActualTotal +=
-				item.ActualQuantity.Int64 * item.ActualCostPerItem.Int64
+		totals.EstimatedTotal += LineItemEstimatedTotal(item)
+		if actual, ok := LineItemActualTotal(item); ok {
+			totals.ActualTotal += actual
 		}
 	}
 	return totals, nil
+}
+
+// in cents, quantity * cost per item
+func LineItemEstimatedTotal(item db.LineItem) int64 {
+	return item.EstimatedQuantity * item.EstimatedCostPerItem
+}
+
+// false until both actual quantity and cost per item are recorded
+func LineItemActualTotal(item db.LineItem) (int64, bool) {
+	if !item.ActualQuantity.Valid || !item.ActualCostPerItem.Valid {
+		return 0, false
+	}
+	return item.ActualQuantity.Int64 * item.ActualCostPerItem.Int64, true
 }
 
 // only in pr_draft, so approvers never see numbers change under them
@@ -380,11 +398,16 @@ func (s *lineItemServiceImpl) Transition(
 	id int64,
 	to db.LineItemStatus,
 ) (db.LineItem, error) {
+	if _, known := lineItemTransitions[to]; !known {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: unknown status %q", ErrInvalidLineItem, to,
+		)
+	}
 	item, err := s.getActive(ctx, id, ErrInvalidLineItemTransition)
 	if err != nil {
 		return db.LineItem{}, err
 	}
-	
+
 	if !CanTransitionLineItem(item.Status, to) {
 		return db.LineItem{}, fmt.Errorf(
 			"%w: line item %d cannot move from %q to %q",
@@ -450,58 +473,48 @@ func (s *lineItemServiceImpl) Archive(ctx context.Context, id int64) error {
 	if !item.IsActive {
 		return nil
 	}
-
-	params := lineItemParamsFrom(item)
-	params.IsActive = false
-	_, err = s.update(ctx, params)
-	return err
+	return s.repo.ArchiveLineItem(ctx, id)
 }
 
-// kind is "estimated" or "actual", unit cost is sign checked only
+// kind is "estimated" or "actual"
 func validateLineItemAmounts(kind string, quantity, costPerItem, unitCost int64) error {
-	if quantity <= 0 {
-		return fmt.Errorf(
-			"%w: %s quantity must be positive, got %d",
-			ErrInvalidLineItem, kind, quantity,
-		)
-	}
-	if costPerItem < 0 {
-		return fmt.Errorf(
-			"%w: %s cost per item must not be negative, got %d",
-			ErrInvalidLineItem, kind, costPerItem,
-		)
-	}
-	if unitCost < 0 {
-		return fmt.Errorf(
-			"%w: %s unit cost must not be negative, got %d",
-			ErrInvalidLineItem, kind, unitCost,
-		)
-	}
-	return nil
+	return errors.Join(
+		checkLineItemAmount(kind+" quantity", quantity, 1, maxLineItemQuantity),
+		checkLineItemAmount(kind+" cost per item", costPerItem, 0, maxLineItemCents),
+		checkLineItemAmount(kind+" unit cost", unitCost, 0, maxLineItemCents),
+	)
 }
 
 // only checks fields that were sent
 func validateLineItemActuals(in LineItemActualsInput) error {
-	if in.ActualQuantity != nil && *in.ActualQuantity <= 0 {
-		return fmt.Errorf(
-			"%w: actual quantity must be positive, got %d",
-			ErrInvalidLineItem, *in.ActualQuantity,
-		)
+	var errs []error
+	if in.ActualQuantity != nil {
+		errs = append(errs, checkLineItemAmount(
+			"actual quantity", *in.ActualQuantity, 1, maxLineItemQuantity,
+		))
 	}
-	if in.ActualCostPerItem != nil && *in.ActualCostPerItem < 0 {
-		return fmt.Errorf(
-			"%w: actual cost per item must not be negative, got %d",
-			ErrInvalidLineItem, *in.ActualCostPerItem,
-		)
+	if in.ActualCostPerItem != nil {
+		errs = append(errs, checkLineItemAmount(
+			"actual cost per item", *in.ActualCostPerItem, 0, maxLineItemCents,
+		))
 	}
-	if in.ActualUnitCost != nil && *in.ActualUnitCost < 0 {
-		return fmt.Errorf(
-			"%w: actual unit cost must not be negative, got %d",
-			ErrInvalidLineItem, *in.ActualUnitCost,
-		)
+	if in.ActualUnitCost != nil {
+		errs = append(errs, checkLineItemAmount(
+			"actual unit cost", *in.ActualUnitCost, 0, maxLineItemCents,
+		))
 	}
 	if in.Description != nil {
-		return validateLineItemDescription(*in.Description)
+		errs = append(errs, validateLineItemDescription(*in.Description))
+	}
+	return errors.Join(errs...)
+}
+
+func checkLineItemAmount(name string, v, lo, hi int64) error {
+	if v < lo || v > hi {
+		return fmt.Errorf(
+			"%w: %s must be between %d and %d, got %d",
+			ErrInvalidLineItem, name, lo, hi, v,
+		)
 	}
 	return nil
 }
