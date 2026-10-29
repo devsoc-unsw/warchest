@@ -1,8 +1,3 @@
-// Line item HTTP handlers: the outermost of three layers. They hold no rules:
-// each parses input, calls one service method, and maps the resulting error to
-// a status code. The rules enforced on a client's behalf live in
-// service/line_item.go.
-
 package handler
 
 import (
@@ -18,48 +13,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// LineItemHandler adapts HTTP to the service. It holds no rules of its own: it parses
-// input, calls one service method, and maps the resulting error to a status
-// code.
 type LineItemHandler struct {
-	svc service.LineItemService
+	service service.LineItemService
 }
 
-// NewLineItemHandler returns a handler backed by the given service.
-func NewLineItemHandler(svc service.LineItemService) *LineItemHandler {
-	return &LineItemHandler{svc: svc}
+func NewLineItemHandler(service service.LineItemService) *LineItemHandler {
+	return &LineItemHandler{service: service}
 }
 
-// LineItemResponse is the wire shape of a line item.
-//
-// It exists so pgtype values never reach the client: a pgtype.Int8 marshals as
-// {"Int64":0,"Valid":false}, which would force every consumer to understand
-// pgx. Absent values are null here instead.
-//
-// All money fields are in cents. The totals are derived rather than stored,
-// so a client never has to decide how to combine quantity and cost itself.
+// from the db
 type LineItemResponse struct {
-	ID                     int64    `json:"id"`
-	PurchaseRequestID      int64    `json:"purchase_request_id"`
-	ReimbursementRequestID *int64   `json:"reimbursement_request_id"`
-	Status                 string   `json:"status"`
-	AllowedTransitions     []string `json:"allowed_transitions"`
-	IsActive               bool     `json:"is_active"`
+	ID                     int64     `json:"id"`
+	PurchaseRequestID      int64     `json:"purchase_request_id"`
+	ReimbursementRequestID *int64    `json:"reimbursement_request_id"`
+	Status                 string    `json:"status"`
+	AllowedTransitions     []string  `json:"allowed_transitions"`
+	IsActive               bool      `json:"is_active"`
 
-	EstimatedQuantity    int64   `json:"estimated_quantity"`
-	EstimatedCostPerItem int64   `json:"estimated_cost_per_item"`
-	EstimatedUnitCost    int64   `json:"estimated_unit_cost"`
-	EstimatedTotal       int64   `json:"estimated_total"`
-	PrDescription        *string `json:"pr_description"`
+	EstimatedQuantity      int64     `json:"estimated_quantity"`
+	EstimatedCostPerItem   int64     `json:"estimated_cost_per_item"`
+	EstimatedUnitCost      int64     `json:"estimated_unit_cost"`
+	EstimatedTotal         int64     `json:"estimated_total"`
+	PrDescription          *string   `json:"pr_description"`
 
-	ActualQuantity    *int64  `json:"actual_quantity"`
-	ActualCostPerItem *int64  `json:"actual_cost_per_item"`
-	ActualUnitCost    *int64  `json:"actual_unit_cost"`
-	ActualTotal       *int64  `json:"actual_total"`
-	ReimbDescription  *string `json:"reimb_description"`
+	ActualQuantity         *int64    `json:"actual_quantity"`
+	ActualCostPerItem      *int64    `json:"actual_cost_per_item"`
+	ActualUnitCost         *int64    `json:"actual_unit_cost"`
+	ActualTotal            *int64    `json:"actual_total"`
+	ReimbDescription       *string   `json:"reimb_description"`
 
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 type LineItemTotalsResponse struct {
@@ -74,12 +58,7 @@ type createLineItemRequest struct {
 	Description          string `json:"description"`
 }
 
-// lineItemEstimatesRequest and lineItemActualsRequest mirror their service
-// inputs field for field, differing only in carrying json tags, and are
-// converted rather than copied across. Go permits the conversion because only
-// the tags differ; if either side gains a field the conversion stops
-// compiling, which is the intended warning rather than a silently dropped
-// value.
+
 type lineItemEstimatesRequest struct {
 	EstimatedQuantity    int64  `json:"estimated_quantity"`
 	EstimatedCostPerItem int64  `json:"estimated_cost_per_item"`
@@ -87,9 +66,7 @@ type lineItemEstimatesRequest struct {
 	Description          string `json:"description"`
 }
 
-// lineItemActualsRequest uses pointers throughout so an omitted field is
-// distinguishable from a zero one: omitting a figure leaves it untouched,
-// which is how a reimbursement is filled in as receipts arrive.
+// can be null so pointer is used
 type lineItemActualsRequest struct {
 	ActualQuantity    *int64  `json:"actual_quantity"`
 	ActualCostPerItem *int64  `json:"actual_cost_per_item"`
@@ -106,7 +83,7 @@ type lineItemAttachRequest struct {
 }
 
 // Create opens a line item on a purchase request.
-func (h *LineItemHandler) Create(c *gin.Context) {
+func (h *LineItemHandler) CreateLineItem(c *gin.Context) {
 	prID, ok := h.pathID(c, "prID")
 	if !ok {
 		return
@@ -116,7 +93,7 @@ func (h *LineItemHandler) Create(c *gin.Context) {
 		return
 	}
 
-	item, err := h.svc.Create(c.Request.Context(), service.CreateLineItemInput{
+	item, err := h.service.Create(c.Request.Context(), service.CreateLineItemInput{
 		PurchaseRequestID:    prID,
 		EstimatedQuantity:    req.EstimatedQuantity,
 		EstimatedCostPerItem: req.EstimatedCostPerItem,
@@ -136,7 +113,7 @@ func (h *LineItemHandler) GetByID(c *gin.Context) {
 	if !ok {
 		return
 	}
-	item, err := h.svc.GetByID(c.Request.Context(), id)
+	item, err := h.service.GetByID(c.Request.Context(), id)
 	if err != nil {
 		failLineItem(c, err)
 		return
@@ -150,7 +127,7 @@ func (h *LineItemHandler) ListByPurchaseRequest(c *gin.Context) {
 	if !ok {
 		return
 	}
-	items, err := h.svc.ListByPurchaseRequest(c.Request.Context(), prID)
+	items, err := h.service.ListByPurchaseRequest(c.Request.Context(), prID)
 	if err != nil {
 		failLineItem(c, err)
 		return
@@ -164,7 +141,7 @@ func (h *LineItemHandler) ListByReimbursementRequest(c *gin.Context) {
 	if !ok {
 		return
 	}
-	items, err := h.svc.ListByReimbursementRequest(c.Request.Context(), reimbID)
+	items, err := h.service.ListByReimbursementRequest(c.Request.Context(), reimbID)
 	if err != nil {
 		failLineItem(c, err)
 		return
@@ -178,7 +155,7 @@ func (h *LineItemHandler) Totals(c *gin.Context) {
 	if !ok {
 		return
 	}
-	totals, err := h.svc.TotalsByPurchaseRequest(c.Request.Context(), prID)
+	totals, err := h.service.TotalsByPurchaseRequest(c.Request.Context(), prID)
 	if err != nil {
 		failLineItem(c, err)
 		return
@@ -197,7 +174,7 @@ func (h *LineItemHandler) UpdateEstimates(c *gin.Context) {
 		return
 	}
 
-	item, err := h.svc.UpdateEstimates(
+	item, err := h.service.UpdateEstimates(
 		c.Request.Context(), id, service.LineItemEstimatesInput(req),
 	)
 	if err != nil {
@@ -218,7 +195,7 @@ func (h *LineItemHandler) UpdateActuals(c *gin.Context) {
 		return
 	}
 
-	item, err := h.svc.UpdateActuals(
+	item, err := h.service.UpdateActuals(
 		c.Request.Context(), id, service.LineItemActualsInput(req),
 	)
 	if err != nil {
@@ -240,7 +217,7 @@ func (h *LineItemHandler) AttachReimbursementRequest(c *gin.Context) {
 		return
 	}
 
-	item, err := h.svc.AttachReimbursementRequest(
+	item, err := h.service.AttachReimbursementRequest(
 		c.Request.Context(), id, req.ReimbursementRequestID,
 	)
 	if err != nil {
@@ -263,7 +240,7 @@ func (h *LineItemHandler) Transition(c *gin.Context) {
 		return
 	}
 
-	item, err := h.svc.Transition(
+	item, err := h.service.Transition(
 		c.Request.Context(), id, db.LineItemStatus(req.Status),
 	)
 	if err != nil {
@@ -279,7 +256,7 @@ func (h *LineItemHandler) Archive(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.svc.Archive(c.Request.Context(), id); err != nil {
+	if err := h.service.Archive(c.Request.Context(), id); err != nil {
 		failLineItem(c, err)
 		return
 	}

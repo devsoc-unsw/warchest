@@ -22,7 +22,7 @@ import (
 func RegisterLineItemRoutes(r gin.IRouter, h *handler.LineItemHandler) {
 	purchaseRequests := r.Group("/purchase-requests/:prID/line-items")
 	{
-		purchaseRequests.POST("", h.Create)
+		purchaseRequests.POST("", h.CreateLineItem)
 		purchaseRequests.GET("", h.ListByPurchaseRequest)
 		purchaseRequests.GET("/totals", h.Totals)
 	}
