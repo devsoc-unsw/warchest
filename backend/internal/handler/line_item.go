@@ -295,7 +295,7 @@ func failLineItem(c *gin.Context, err error) {
 }
 
 func toLineItemResponse(item db.LineItem) LineItemResponse {
-	next := service.NextLineItemStates(item.Status)
+	next := service.AllowedLineItemTransitions(item)
 	allowed := make([]string, len(next))
 	for i, status := range next {
 		allowed[i] = string(status)

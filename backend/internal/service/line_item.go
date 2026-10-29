@@ -77,6 +77,28 @@ func NextLineItemStates(from db.LineItemStatus) []db.LineItemStatus {
 	return out
 }
 
+// what Transition accepts for this item, unlike NextLineItemStates which
+// only knows the status. reimb_pending is still offered without actuals,
+// that's a 400 for missing input, not a move the item can't make
+func AllowedLineItemTransitions(item db.LineItem) []db.LineItemStatus {
+	out := []db.LineItemStatus{}
+	if !item.IsActive {
+		return out
+	}
+	for _, next := range lineItemTransitions[item.Status] {
+		if !missingReimbursementRequest(item, next) {
+			out = append(out, next)
+		}
+	}
+	return out
+}
+
+// pr_approved -> reimb_draft goes through AttachReimbursementRequest,
+// which sets the reimbursement id in the same write
+func missingReimbursementRequest(item db.LineItem, to db.LineItemStatus) bool {
+	return IsLineItemReimbursementPhase(to) && !item.ReimbursementRequestID.Valid
+}
+
 // unknown statuses are invalid, not terminal
 func IsTerminalLineItemStatus(s db.LineItemStatus) bool {
 	next, known := lineItemTransitions[s]
@@ -414,9 +436,7 @@ func (s *lineItemServiceImpl) Transition(
 			ErrInvalidLineItemTransition, id, item.Status, to,
 		)
 	}
-	// pr_approved -> reimb_draft goes through AttachReimbursementRequest,
-	// which sets the reimbursement id in the same write
-	if IsLineItemReimbursementPhase(to) && !item.ReimbursementRequestID.Valid {
+	if missingReimbursementRequest(item, to) {
 		return db.LineItem{}, fmt.Errorf(
 			"%w: line item %d has no reimbursement request, attach one to move to %q",
 			ErrInvalidLineItemTransition, id, to,

@@ -1258,3 +1258,48 @@ func TestActualsAreBounded(t *testing.T) {
 		}
 	}
 }
+
+// what the response offers must be exactly what Transition accepts
+func TestAllowedTransitionsAgreesWithTransition(t *testing.T) {
+	variants := map[string]func(db.LineItem) db.LineItem{
+		"active":   func(item db.LineItem) db.LineItem { return item },
+		"archived": func(item db.LineItem) db.LineItem { item.IsActive = false; return item },
+		"no reimbursement request": func(item db.LineItem) db.LineItem {
+			item.ReimbursementRequestID = pgtype.Int8{}
+			return item
+		},
+	}
+	for _, from := range AllLineItemStatuses {
+		for name, variant := range variants {
+			for _, to := range AllLineItemStatuses {
+				t.Run(string(from)+"_"+name+"_to_"+string(to), func(t *testing.T) {
+					repo := newFakeLineItemRepo()
+					// actuals set so the reimb_pending input check doesn't interfere
+					item := variant(withActuals(seedItem(repo, from)))
+					repo.seed(item)
+
+					offered := false
+					for _, next := range AllowedLineItemTransitions(item) {
+						offered = offered || next == to
+					}
+					_, err := NewLineItemService(repo).
+						Transition(context.Background(), 1, to)
+					if offered && err != nil {
+						t.Errorf("offered but Transition returned %v", err)
+					}
+					if !offered && err == nil {
+						t.Error("not offered but Transition succeeded")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestAllowedTransitionsOfApprovedItemNeedsAttach(t *testing.T) {
+	repo := newFakeLineItemRepo()
+	item := seedItem(repo, db.LineItemStatusPrApproved)
+	if got := AllowedLineItemTransitions(item); len(got) != 0 {
+		t.Errorf("AllowedLineItemTransitions = %v, want none until attached", got)
+	}
+}
