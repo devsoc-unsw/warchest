@@ -219,6 +219,24 @@ func (s *lineItemServiceImpl) GetByID(
 	return item, nil
 }
 
+// archived items are read-only, archivedErr is the error callers report it as
+func (s *lineItemServiceImpl) getActive(
+	ctx context.Context,
+	id int64,
+	archivedErr error,
+) (db.LineItem, error) {
+	item, err := s.GetByID(ctx, id)
+	if err != nil {
+		return db.LineItem{}, err
+	}
+	if !item.IsActive {
+		return db.LineItem{}, fmt.Errorf(
+			"%w: line item %d is archived", archivedErr, id,
+		)
+	}
+	return item, nil
+}
+
 func (s *lineItemServiceImpl) ListByPurchaseRequest(
 	ctx context.Context,
 	prID int64,
@@ -260,7 +278,7 @@ func (s *lineItemServiceImpl) UpdateEstimates(
 	id int64,
 	in LineItemEstimatesInput,
 ) (db.LineItem, error) {
-	item, err := s.GetByID(ctx, id)
+	item, err := s.getActive(ctx, id, ErrImmutableLineItemField)
 	if err != nil {
 		return db.LineItem{}, err
 	}
@@ -297,7 +315,7 @@ func (s *lineItemServiceImpl) UpdateActuals(
 	id int64,
 	in LineItemActualsInput,
 ) (db.LineItem, error) {
-	item, err := s.GetByID(ctx, id)
+	item, err := s.getActive(ctx, id, ErrImmutableLineItemField)
 	if err != nil {
 		return db.LineItem{}, err
 	}
@@ -338,7 +356,7 @@ func (s *lineItemServiceImpl) AttachReimbursementRequest(
 			ErrInvalidLineItem, reimbID,
 		)
 	}
-	item, err := s.GetByID(ctx, id)
+	item, err := s.getActive(ctx, id, ErrInvalidLineItemTransition)
 	if err != nil {
 		return db.LineItem{}, err
 	}
@@ -362,15 +380,11 @@ func (s *lineItemServiceImpl) Transition(
 	id int64,
 	to db.LineItemStatus,
 ) (db.LineItem, error) {
-	item, err := s.GetByID(ctx, id)
+	item, err := s.getActive(ctx, id, ErrInvalidLineItemTransition)
 	if err != nil {
 		return db.LineItem{}, err
 	}
-	if !item.IsActive {
-		return db.LineItem{}, fmt.Errorf(
-			"%w: line item %d is archived", ErrInvalidLineItemTransition, id,
-		)
-	}
+	
 	if !CanTransitionLineItem(item.Status, to) {
 		return db.LineItem{}, fmt.Errorf(
 			"%w: line item %d cannot move from %q to %q",

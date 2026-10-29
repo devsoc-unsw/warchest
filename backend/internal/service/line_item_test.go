@@ -1177,3 +1177,46 @@ func TestTransitionSoftRejectKeepsReimbursementRequest(t *testing.T) {
 		t.Errorf("reimbursement request = %+v, want it kept", got.ReimbursementRequestID)
 	}
 }
+
+func TestMutationsOnArchivedItemAreRejected(t *testing.T) {
+	tests := []struct {
+		name   string
+		status db.LineItemStatus
+		want   error
+		mutate func(LineItemService) error
+	}{
+		{"UpdateEstimates", db.LineItemStatusPrDraft, ErrImmutableLineItemField,
+			func(s LineItemService) error {
+				_, err := s.UpdateEstimates(context.Background(), 1, validEstimates())
+				return err
+			}},
+		{"UpdateActuals", db.LineItemStatusReimbDraft, ErrImmutableLineItemField,
+			func(s LineItemService) error {
+				_, err := s.UpdateActuals(context.Background(), 1,
+					LineItemActualsInput{ActualQuantity: p64(3)})
+				return err
+			}},
+		{"AttachReimbursementRequest", db.LineItemStatusPrApproved,
+			ErrInvalidLineItemTransition,
+			func(s LineItemService) error {
+				_, err := s.AttachReimbursementRequest(context.Background(), 1, 42)
+				return err
+			}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newFakeLineItemRepo()
+			item := seedItem(repo, tt.status)
+			item.IsActive = false
+			repo.seed(item)
+
+			if err := tt.mutate(NewLineItemService(repo)); !errors.Is(err, tt.want) {
+				t.Fatalf("returned %v, want %v", err, tt.want)
+			}
+			if repo.items[1] != item {
+				t.Errorf("archived item changed:\n got %+v\nwant %+v",
+					repo.items[1], item)
+			}
+		})
+	}
+}
