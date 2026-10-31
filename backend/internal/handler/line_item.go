@@ -6,11 +6,10 @@ import (
 	"strconv"
 	"time"
 
-	"backend/db"
+	"backend/internal/domain"
 	"backend/internal/service"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type LineItemHandler struct {
@@ -21,7 +20,7 @@ func NewLineItemHandler(svc service.LineItemService) *LineItemHandler {
 	return &LineItemHandler{service: svc}
 }
 
-// JSON shape, pgtype nulls become nil pointers, money in cents
+// JSON shape, values that aren't recorded yet appear as null. money is in cents
 type LineItemResponse struct {
 	ID                     int64    `json:"id"`
 	PurchaseRequestID      int64    `json:"purchase_request_id"`
@@ -231,7 +230,7 @@ func (h *LineItemHandler) Transition(c *gin.Context) {
 	}
 
 	item, err := h.service.Transition(
-		c.Request.Context(), id, db.LineItemStatus(req.Status),
+		c.Request.Context(), id, domain.LineItemStatus(req.Status),
 	)
 	if err != nil {
 		failLineItem(c, err)
@@ -294,7 +293,7 @@ func failLineItem(c *gin.Context, err error) {
 	}
 }
 
-func toLineItemResponse(item db.LineItem) LineItemResponse {
+func toLineItemResponse(item domain.LineItem) LineItemResponse {
 	next := service.AllowedLineItemTransitions(item)
 	allowed := make([]string, len(next))
 	for i, status := range next {
@@ -304,7 +303,7 @@ func toLineItemResponse(item db.LineItem) LineItemResponse {
 	res := LineItemResponse{
 		ID:                     item.ID,
 		PurchaseRequestID:      item.PurchaseRequestID,
-		ReimbursementRequestID: nullInt(item.ReimbursementRequestID),
+		ReimbursementRequestID: item.ReimbursementRequestID,
 		Status:                 string(item.Status),
 		AllowedTransitions:     allowed,
 		IsActive:               item.IsActive,
@@ -313,15 +312,15 @@ func toLineItemResponse(item db.LineItem) LineItemResponse {
 		EstimatedCostPerItem: item.EstimatedCostPerItem,
 		EstimatedUnitCost:    item.EstimatedUnitCost,
 		EstimatedTotal:       service.LineItemEstimatedTotal(item),
-		PrDescription:        nullText(item.PrDescription),
+		PrDescription:        item.PrDescription,
 
-		ActualQuantity:    nullInt(item.ActualQuantity),
-		ActualCostPerItem: nullInt(item.ActualCostPerItem),
-		ActualUnitCost:    nullInt(item.ActualUnitCost),
-		ReimbDescription:  nullText(item.ReimbDescription),
+		ActualQuantity:    item.ActualQuantity,
+		ActualCostPerItem: item.ActualCostPerItem,
+		ActualUnitCost:    item.ActualUnitCost,
+		ReimbDescription:  item.ReimbDescription,
 
-		CreatedAt: item.CreatedAt.Time,
-		UpdatedAt: item.UpdatedAt.Time,
+		CreatedAt: item.CreatedAt,
+		UpdatedAt: item.UpdatedAt,
 	}
 	if total, ok := service.LineItemActualTotal(item); ok {
 		res.ActualTotal = &total
@@ -330,24 +329,10 @@ func toLineItemResponse(item db.LineItem) LineItemResponse {
 }
 
 // non-nil so empty marshals as [] not null
-func toLineItemResponses(items []db.LineItem) []LineItemResponse {
+func toLineItemResponses(items []domain.LineItem) []LineItemResponse {
 	out := make([]LineItemResponse, 0, len(items))
 	for _, item := range items {
 		out = append(out, toLineItemResponse(item))
 	}
 	return out
-}
-
-func nullInt(v pgtype.Int8) *int64 {
-	if !v.Valid {
-		return nil
-	}
-	return &v.Int64
-}
-
-func nullText(v pgtype.Text) *string {
-	if !v.Valid {
-		return nil
-	}
-	return &v.String
 }

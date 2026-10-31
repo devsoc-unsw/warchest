@@ -6,11 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"backend/db"
+	"backend/internal/domain"
 	"backend/internal/repository"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // handler maps these to status codes via errors.Is
@@ -26,41 +23,41 @@ var (
 	)
 )
 
-var AllLineItemStatuses = []db.LineItemStatus{
-	db.LineItemStatusPrDraft,
-	db.LineItemStatusPrPending,
-	db.LineItemStatusPrApproved,
-	db.LineItemStatusPrRejected,
-	db.LineItemStatusReimbDraft,
-	db.LineItemStatusReimbPending,
-	db.LineItemStatusReimbApproved,
-	db.LineItemStatusReimbRejected,
+var AllLineItemStatuses = []domain.LineItemStatus{
+	domain.LineItemStatusPrDraft,
+	domain.LineItemStatusPrPending,
+	domain.LineItemStatusPrApproved,
+	domain.LineItemStatusPrRejected,
+	domain.LineItemStatusReimbDraft,
+	domain.LineItemStatusReimbPending,
+	domain.LineItemStatusReimbApproved,
+	domain.LineItemStatusReimbRejected,
 }
 
 // status -> statuses it can move to, empty = terminal
-var lineItemTransitions = map[db.LineItemStatus][]db.LineItemStatus{
+var lineItemTransitions = map[domain.LineItemStatus][]domain.LineItemStatus{
 	// purchase request phase
-	db.LineItemStatusPrDraft: {db.LineItemStatusPrPending},
-	db.LineItemStatusPrPending: {
-		db.LineItemStatusPrDraft, // soft reject, submitter can edit and resubmit
-		db.LineItemStatusPrApproved,
-		db.LineItemStatusPrRejected,
+	domain.LineItemStatusPrDraft: {domain.LineItemStatusPrPending},
+	domain.LineItemStatusPrPending: {
+		domain.LineItemStatusPrDraft, // soft reject, submitter can edit and resubmit
+		domain.LineItemStatusPrApproved,
+		domain.LineItemStatusPrRejected,
 	},
-	db.LineItemStatusPrApproved: {db.LineItemStatusReimbDraft},
-	db.LineItemStatusPrRejected: {},
+	domain.LineItemStatusPrApproved: {domain.LineItemStatusReimbDraft},
+	domain.LineItemStatusPrRejected: {},
 
 	// reimbursement phase
-	db.LineItemStatusReimbDraft: {db.LineItemStatusReimbPending},
-	db.LineItemStatusReimbPending: {
-		db.LineItemStatusReimbDraft, // soft reject, submitter can edit and resubmit
-		db.LineItemStatusReimbApproved,
-		db.LineItemStatusReimbRejected,
+	domain.LineItemStatusReimbDraft: {domain.LineItemStatusReimbPending},
+	domain.LineItemStatusReimbPending: {
+		domain.LineItemStatusReimbDraft, // soft reject, submitter can edit and resubmit
+		domain.LineItemStatusReimbApproved,
+		domain.LineItemStatusReimbRejected,
 	},
-	db.LineItemStatusReimbApproved: {},
-	db.LineItemStatusReimbRejected: {},
+	domain.LineItemStatusReimbApproved: {},
+	domain.LineItemStatusReimbRejected: {},
 }
 
-func CanTransitionLineItem(from, to db.LineItemStatus) bool {
+func CanTransitionLineItem(from, to domain.LineItemStatus) bool {
 	for _, next := range lineItemTransitions[from] {
 		if next == to {
 			return true
@@ -70,9 +67,9 @@ func CanTransitionLineItem(from, to db.LineItemStatus) bool {
 }
 
 // returns a copy so callers can't mutate the table
-func NextLineItemStates(from db.LineItemStatus) []db.LineItemStatus {
+func NextLineItemStates(from domain.LineItemStatus) []domain.LineItemStatus {
 	next := lineItemTransitions[from]
-	out := make([]db.LineItemStatus, len(next))
+	out := make([]domain.LineItemStatus, len(next))
 	copy(out, next)
 	return out
 }
@@ -80,8 +77,8 @@ func NextLineItemStates(from db.LineItemStatus) []db.LineItemStatus {
 // what Transition accepts for this item, unlike NextLineItemStates which
 // only knows the status. reimb_pending is still offered without actuals,
 // that's a 400 for missing input, not a move the item can't make
-func AllowedLineItemTransitions(item db.LineItem) []db.LineItemStatus {
-	out := []db.LineItemStatus{}
+func AllowedLineItemTransitions(item domain.LineItem) []domain.LineItemStatus {
+	out := []domain.LineItemStatus{}
 	if !item.IsActive {
 		return out
 	}
@@ -95,22 +92,25 @@ func AllowedLineItemTransitions(item db.LineItem) []db.LineItemStatus {
 
 // pr_approved -> reimb_draft goes through AttachReimbursementRequest,
 // which sets the reimbursement id in the same write
-func missingReimbursementRequest(item db.LineItem, to db.LineItemStatus) bool {
-	return IsLineItemReimbursementPhase(to) && !item.ReimbursementRequestID.Valid
+func missingReimbursementRequest(
+	item domain.LineItem,
+	to domain.LineItemStatus,
+) bool {
+	return IsLineItemReimbursementPhase(to) && item.ReimbursementRequestID == nil
 }
 
 // unknown statuses are invalid, not terminal
-func IsTerminalLineItemStatus(s db.LineItemStatus) bool {
+func IsTerminalLineItemStatus(s domain.LineItemStatus) bool {
 	next, known := lineItemTransitions[s]
 	return known && len(next) == 0
 }
 
-func IsLineItemReimbursementPhase(s db.LineItemStatus) bool {
+func IsLineItemReimbursementPhase(s domain.LineItemStatus) bool {
 	switch s {
-	case db.LineItemStatusReimbDraft,
-		db.LineItemStatusReimbPending,
-		db.LineItemStatusReimbApproved,
-		db.LineItemStatusReimbRejected:
+	case domain.LineItemStatusReimbDraft,
+		domain.LineItemStatusReimbPending,
+		domain.LineItemStatusReimbApproved,
+		domain.LineItemStatusReimbRejected:
 		return true
 	default:
 		return false
@@ -157,34 +157,37 @@ type LineItemTotals struct {
 }
 
 type LineItemService interface {
-	Create(ctx context.Context, in CreateLineItemInput) (db.LineItem, error)
-	GetByID(ctx context.Context, id int64) (db.LineItem, error)
-	ListByPurchaseRequest(ctx context.Context, prID int64) ([]db.LineItem, error)
+	Create(ctx context.Context, in CreateLineItemInput) (domain.LineItem, error)
+	GetByID(ctx context.Context, id int64) (domain.LineItem, error)
+	ListByPurchaseRequest(
+		ctx context.Context,
+		prID int64,
+	) ([]domain.LineItem, error)
 	ListByReimbursementRequest(
 		ctx context.Context,
 		reimbID int64,
-	) ([]db.LineItem, error)
+	) ([]domain.LineItem, error)
 	TotalsByPurchaseRequest(ctx context.Context, prID int64) (LineItemTotals, error)
 
 	UpdateEstimates(
 		ctx context.Context,
 		id int64,
 		in LineItemEstimatesInput,
-	) (db.LineItem, error)
+	) (domain.LineItem, error)
 	UpdateActuals(
 		ctx context.Context,
 		id int64,
 		in LineItemActualsInput,
-	) (db.LineItem, error)
+	) (domain.LineItem, error)
 	AttachReimbursementRequest(
 		ctx context.Context,
 		id, reimbID int64,
-	) (db.LineItem, error)
+	) (domain.LineItem, error)
 	Transition(
 		ctx context.Context,
 		id int64,
-		to db.LineItemStatus,
-	) (db.LineItem, error)
+		to domain.LineItemStatus,
+	) (domain.LineItem, error)
 	Archive(ctx context.Context, id int64) error
 }
 
@@ -201,9 +204,9 @@ func NewLineItemService(repo repository.LineItemRepository) LineItemService {
 func (s *lineItemServiceImpl) Create(
 	ctx context.Context,
 	in CreateLineItemInput,
-) (db.LineItem, error) {
+) (domain.LineItem, error) {
 	if in.PurchaseRequestID <= 0 {
-		return db.LineItem{}, fmt.Errorf(
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: purchase request id must be positive, got %d",
 			ErrInvalidLineItem, in.PurchaseRequestID,
 		)
@@ -215,17 +218,17 @@ func (s *lineItemServiceImpl) Create(
 		in.EstimatedUnitCost,
 	)
 	if err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
 	if err = validateLineItemDescription(in.Description); err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
 
-	return s.repo.CreateLineItem(ctx, db.CreateLineItemParams{
+	return s.repo.CreateLineItem(ctx, repository.CreateLineItemParams{
 		EstimatedQuantity:    in.EstimatedQuantity,
 		EstimatedCostPerItem: in.EstimatedCostPerItem,
 		EstimatedUnitCost:    in.EstimatedUnitCost,
-		PrDescription:        textFrom(in.Description),
+		PrDescription:        descriptionPtr(in.Description),
 		PurchaseRequestID:    in.PurchaseRequestID,
 	})
 }
@@ -234,15 +237,15 @@ func (s *lineItemServiceImpl) Create(
 func (s *lineItemServiceImpl) GetByID(
 	ctx context.Context,
 	id int64,
-) (db.LineItem, error) {
+) (domain.LineItem, error) {
 	item, err := s.repo.GetLineItemByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return db.LineItem{}, fmt.Errorf(
+		if errors.Is(err, repository.ErrLineItemNotFound) {
+			return domain.LineItem{}, fmt.Errorf(
 				"%w: line item %d", ErrLineItemNotFound, id,
 			)
 		}
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
 	return item, nil
 }
@@ -252,13 +255,13 @@ func (s *lineItemServiceImpl) getActive(
 	ctx context.Context,
 	id int64,
 	archivedErr error,
-) (db.LineItem, error) {
+) (domain.LineItem, error) {
 	item, err := s.GetByID(ctx, id)
 	if err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
 	if !item.IsActive {
-		return db.LineItem{}, fmt.Errorf(
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: line item %d is archived", archivedErr, id,
 		)
 	}
@@ -268,15 +271,15 @@ func (s *lineItemServiceImpl) getActive(
 func (s *lineItemServiceImpl) ListByPurchaseRequest(
 	ctx context.Context,
 	prID int64,
-) ([]db.LineItem, error) {
+) ([]domain.LineItem, error) {
 	return s.repo.GetLineItemsByPRID(ctx, prID)
 }
 
 func (s *lineItemServiceImpl) ListByReimbursementRequest(
 	ctx context.Context,
 	reimbID int64,
-) ([]db.LineItem, error) {
-	return s.repo.GetLineItemsByReimbID(ctx, int8From(&reimbID))
+) ([]domain.LineItem, error) {
+	return s.repo.GetLineItemsByReimbID(ctx, reimbID)
 }
 
 // actual total only counts items with both actual quantity and cost set
@@ -300,16 +303,16 @@ func (s *lineItemServiceImpl) TotalsByPurchaseRequest(
 }
 
 // in cents, quantity * cost per item
-func LineItemEstimatedTotal(item db.LineItem) int64 {
+func LineItemEstimatedTotal(item domain.LineItem) int64 {
 	return item.EstimatedQuantity * item.EstimatedCostPerItem
 }
 
 // false until both actual quantity and cost per item are recorded
-func LineItemActualTotal(item db.LineItem) (int64, bool) {
-	if !item.ActualQuantity.Valid || !item.ActualCostPerItem.Valid {
+func LineItemActualTotal(item domain.LineItem) (int64, bool) {
+	if item.ActualQuantity == nil || item.ActualCostPerItem == nil {
 		return 0, false
 	}
-	return item.ActualQuantity.Int64 * item.ActualCostPerItem.Int64, true
+	return *item.ActualQuantity * *item.ActualCostPerItem, true
 }
 
 // only in pr_draft, so approvers never see numbers change under them
@@ -317,15 +320,15 @@ func (s *lineItemServiceImpl) UpdateEstimates(
 	ctx context.Context,
 	id int64,
 	in LineItemEstimatesInput,
-) (db.LineItem, error) {
+) (domain.LineItem, error) {
 	item, err := s.getActive(ctx, id, ErrImmutableLineItemField)
 	if err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
-	if item.Status != db.LineItemStatusPrDraft {
-		return db.LineItem{}, fmt.Errorf(
+	if item.Status != domain.LineItemStatusPrDraft {
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: estimates are editable only in %q, line item %d is %q",
-			ErrImmutableLineItemField, db.LineItemStatusPrDraft, id, item.Status,
+			ErrImmutableLineItemField, domain.LineItemStatusPrDraft, id, item.Status,
 		)
 	}
 	err = validateLineItemAmounts(
@@ -335,18 +338,17 @@ func (s *lineItemServiceImpl) UpdateEstimates(
 		in.EstimatedUnitCost,
 	)
 	if err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
 	if err = validateLineItemDescription(in.Description); err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
 
-	params := lineItemParamsFrom(item)
-	params.EstimatedQuantity = in.EstimatedQuantity
-	params.EstimatedCostPerItem = in.EstimatedCostPerItem
-	params.EstimatedUnitCost = in.EstimatedUnitCost
-	params.PrDescription = textFrom(in.Description)
-	return s.update(ctx, params)
+	item.EstimatedQuantity = in.EstimatedQuantity
+	item.EstimatedCostPerItem = in.EstimatedCostPerItem
+	item.EstimatedUnitCost = in.EstimatedUnitCost
+	item.PrDescription = descriptionPtr(in.Description)
+	return s.update(ctx, item)
 }
 
 // only in reimb_draft, frozen once submitted
@@ -354,108 +356,102 @@ func (s *lineItemServiceImpl) UpdateActuals(
 	ctx context.Context,
 	id int64,
 	in LineItemActualsInput,
-) (db.LineItem, error) {
+) (domain.LineItem, error) {
 	item, err := s.getActive(ctx, id, ErrImmutableLineItemField)
 	if err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
-	if item.Status != db.LineItemStatusReimbDraft {
-		return db.LineItem{}, fmt.Errorf(
+	if item.Status != domain.LineItemStatusReimbDraft {
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: actuals are writable only in %q, line item %d is %q",
-			ErrImmutableLineItemField, db.LineItemStatusReimbDraft, id, item.Status,
+			ErrImmutableLineItemField, domain.LineItemStatusReimbDraft, id, item.Status,
 		)
 	}
 	if err = validateLineItemActuals(in); err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
 
-	params := lineItemParamsFrom(item)
 	if in.ActualQuantity != nil {
-		params.ActualQuantity = int8From(in.ActualQuantity)
+		item.ActualQuantity = in.ActualQuantity
 	}
 	if in.ActualCostPerItem != nil {
-		params.ActualCostPerItem = int8From(in.ActualCostPerItem)
+		item.ActualCostPerItem = in.ActualCostPerItem
 	}
 	if in.ActualUnitCost != nil {
-		params.ActualUnitCost = int8From(in.ActualUnitCost)
+		item.ActualUnitCost = in.ActualUnitCost
 	}
 	if in.Description != nil {
-		params.ReimbDescription = textFrom(*in.Description)
+		item.ReimbDescription = descriptionPtr(*in.Description)
 	}
-	return s.update(ctx, params)
+	return s.update(ctx, item)
 }
 
 // links the reimbursement and moves to reimb_draft in one write
 func (s *lineItemServiceImpl) AttachReimbursementRequest(
 	ctx context.Context,
 	id, reimbID int64,
-) (db.LineItem, error) {
+) (domain.LineItem, error) {
 	if reimbID <= 0 {
-		return db.LineItem{}, fmt.Errorf(
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: reimbursement request id must be positive, got %d",
 			ErrInvalidLineItem, reimbID,
 		)
 	}
 	item, err := s.getActive(ctx, id, ErrInvalidLineItemTransition)
 	if err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
 	// only pr_approved. reimb_pending -> reimb_draft is a soft reject, not a reattach
-	if item.Status != db.LineItemStatusPrApproved {
-		return db.LineItem{}, fmt.Errorf(
+	if item.Status != domain.LineItemStatusPrApproved {
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: line item %d is %q, cannot enter the reimbursement phase",
 			ErrInvalidLineItemTransition, id, item.Status,
 		)
 	}
 
-	params := lineItemParamsFrom(item)
-	params.ReimbursementRequestID = int8From(&reimbID)
-	params.Status = db.LineItemStatusReimbDraft
-	return s.update(ctx, params)
+	item.ReimbursementRequestID = &reimbID
+	item.Status = domain.LineItemStatusReimbDraft
+	return s.update(ctx, item)
 }
 
 // checks on the read for clear errors, the guarded write catches concurrent changes
 func (s *lineItemServiceImpl) Transition(
 	ctx context.Context,
 	id int64,
-	to db.LineItemStatus,
-) (db.LineItem, error) {
+	to domain.LineItemStatus,
+) (domain.LineItem, error) {
 	if _, known := lineItemTransitions[to]; !known {
-		return db.LineItem{}, fmt.Errorf(
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: unknown status %q", ErrInvalidLineItem, to,
 		)
 	}
 	item, err := s.getActive(ctx, id, ErrInvalidLineItemTransition)
 	if err != nil {
-		return db.LineItem{}, err
+		return domain.LineItem{}, err
 	}
 
 	if !CanTransitionLineItem(item.Status, to) {
-		return db.LineItem{}, fmt.Errorf(
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: line item %d cannot move from %q to %q",
 			ErrInvalidLineItemTransition, id, item.Status, to,
 		)
 	}
 	if missingReimbursementRequest(item, to) {
-		return db.LineItem{}, fmt.Errorf(
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: line item %d has no reimbursement request, attach one to move to %q",
 			ErrInvalidLineItemTransition, id, to,
 		)
 	}
-	if to == db.LineItemStatusReimbPending {
+	if to == domain.LineItemStatusReimbPending {
 		if err = requireLineItemActuals(item); err != nil {
-			return db.LineItem{}, err
+			return domain.LineItem{}, err
 		}
 	}
 
-	updated, err := s.repo.TransitionLineItem(ctx, db.TransitionLineItemParams{
-		ID:         id,
-		FromStatus: item.Status,
-		ToStatus:   to,
-	})
+	updated, err := s.repo.TransitionLineItem(ctx, id, item.Status, to)
 	// no row = someone changed or archived it after our read
-	if errors.Is(err, pgx.ErrNoRows) {
-		return db.LineItem{}, fmt.Errorf(
+	if errors.Is(err, repository.ErrLineItemConflict) {
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: line item %d changed while moving from %q to %q, reload and retry",
 			ErrInvalidLineItemTransition, id, item.Status, to,
 		)
@@ -464,15 +460,15 @@ func (s *lineItemServiceImpl) Transition(
 }
 
 // can't submit a reimbursement with empty actuals
-func requireLineItemActuals(item db.LineItem) error {
+func requireLineItemActuals(item domain.LineItem) error {
 	var missing []string
-	if !item.ActualQuantity.Valid {
+	if item.ActualQuantity == nil {
 		missing = append(missing, "quantity")
 	}
-	if !item.ActualCostPerItem.Valid {
+	if item.ActualCostPerItem == nil {
 		missing = append(missing, "cost per item")
 	}
-	if !item.ActualUnitCost.Valid {
+	if item.ActualUnitCost == nil {
 		missing = append(missing, "unit cost")
 	}
 	if len(missing) > 0 {
@@ -549,52 +545,26 @@ func validateLineItemDescription(description string) error {
 	return nil
 }
 
-// UpdateLineItem writes every column, so start from the current row.
-// UpdatedAt is the read version the write is guarded on
-func lineItemParamsFrom(item db.LineItem) db.UpdateLineItemParams {
-	return db.UpdateLineItemParams{
-		ID:                     item.ID,
-		EstimatedQuantity:      item.EstimatedQuantity,
-		EstimatedCostPerItem:   item.EstimatedCostPerItem,
-		EstimatedUnitCost:      item.EstimatedUnitCost,
-		PrDescription:          item.PrDescription,
-		ActualQuantity:         item.ActualQuantity,
-		ActualCostPerItem:      item.ActualCostPerItem,
-		ActualUnitCost:         item.ActualUnitCost,
-		ReimbDescription:       item.ReimbDescription,
-		ReimbursementRequestID: item.ReimbursementRequestID,
-		Status:                 item.Status,
-		IsActive:               item.IsActive,
-		UpdatedAt:              item.UpdatedAt,
-	}
-}
-
-// guarded on updated_at, no row = someone wrote it after our read
+// UpdateLineItem writes every column from the item it is given, and is guarded
+// on UpdatedAt, so the item must be the one that was just read
 func (s *lineItemServiceImpl) update(
 	ctx context.Context,
-	params db.UpdateLineItemParams,
-) (db.LineItem, error) {
-	updated, err := s.repo.UpdateLineItem(ctx, params)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return db.LineItem{}, fmt.Errorf(
+	item domain.LineItem,
+) (domain.LineItem, error) {
+	updated, err := s.repo.UpdateLineItem(ctx, item)
+	if errors.Is(err, repository.ErrLineItemConflict) {
+		return domain.LineItem{}, fmt.Errorf(
 			"%w: line item %d changed since it was read, reload and retry",
-			ErrLineItemConflict, params.ID,
+			ErrLineItemConflict, item.ID,
 		)
 	}
 	return updated, err
 }
 
 // empty string -> NULL
-func textFrom(s string) pgtype.Text {
+func descriptionPtr(s string) *string {
 	if s == "" {
-		return pgtype.Text{}
+		return nil
 	}
-	return pgtype.Text{String: s, Valid: true}
-}
-
-func int8From(v *int64) pgtype.Int8 {
-	if v == nil {
-		return pgtype.Int8{}
-	}
-	return pgtype.Int8{Int64: *v, Valid: true}
+	return &s
 }
