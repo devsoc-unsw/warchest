@@ -44,9 +44,13 @@ jobs:
   # ==========================================
   fast-checks-backend:
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: ./backend
+    env:
+      SPICEDB_ADDRESS: localhost:50051
+      SPICEDB_PRESHARED_KEY: "warchest"
     steps: 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,7 +60,13 @@ jobs:
         with:
           go-version: '1.22'
           cache: true
-
+      - name: Start SpiceDB
+        uses: authzed/action-spicedb@v1
+        with:
+          version: latest
+          grpcTLSKeyPath: ""
+          grpcTLSCertPath: ""
+          preshared-key: "warchest"
       - name: Install Go Dependencies
         run: go mod download
 
@@ -69,7 +79,6 @@ jobs:
 
       - name: Run Go Tests
         run: go test -v ./...
-        working-directory: ./backend
 
       - name: Verify Backend Docker Build
         run: docker build -t backend-test .

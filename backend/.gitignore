@@ -1,3 +1,4 @@
 # Dingo
 /.dmap
-/build
+/build.env
+.env
