@@ -13,9 +13,10 @@ services:
       - NODE_ENV=development
       - BE_DATABASE_URL=postgres://postgres:password@warchest-postgres-be:5432/warchest
       - MM_DATABASE_URL=postgres://postgres:password@warchest-postgres-mm:5432/money_module
-      - TIGERBEETLE_ADDRESS=tigerbeetle:3000
+      - TIGERBEETLE_ADDRESS=warchest-tigerbeetle:3000
       - SPICEDB_ADDRESS=warchest-spicedb:50051
       - SPICEDB_PRESHARED_KEY=warchestdabest
+      - SPICEDB_INSECURE_MODE=true
     networks:
       - devsoc-network
     depends_on:
@@ -72,9 +73,9 @@ services:
       - tigerbeetle_data:/data
     security_opt:
       - seccomp:unconfined
-  mock-spicedb:
+  warchest-spicedb:
     container_name: "spicedb"
-    image: authzed/spicedb:v1.39.0 
+    image: authzed/spicedb:v1.39.0
     command: "serve"
     restart: "no"
     ports:
@@ -82,17 +83,18 @@ services:
     environment:
       - "SPICEDB_LOG_FORMAT=json"
       - "SPICEDB_LOG_LEVEL=info"
-      - "SPICEDB_GRPC_PRESHARED_KEY=super-secret-key"
+      - "SPICEDB_GRPC_PRESHARED_KEY=warchestdabest"
       - "SPICEDB_DATASTORE_ENGINE=memory"
-      - "SPICEDB_OTEL_PROVIDER=otlpgrpc"
-      - "SPICEDB_OTEL_SAMPLE_RATIO=1"
       - "SPICEDB_TELEMETRY_ENDPOINT="
       - "SPICEDB_GRPC_LOG_REQUESTS_ENABLED=false"
       - "SPICEDB_GRPC_LOG_RESPONSES_ENABLED=false"
       - "SPICEDB_STREAMING_API_RESPONSE_DELAY_TIMEOUT=0s"
-      - "SPICEDB_ENABLE_PERFORMANCE_INSIGHT_METRICS=true"
+      - "SPICEDB_OTEL_PROVIDER=otlpgrpc"
+      - "SPICEDB_OTEL_SAMPLE_RATIO=1"
+    networks:
+      - devsoc-network
     healthcheck:
-      test: ["CMD", "/bin/grpc_health_probe", "-addr=localhost:50051"]
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
       interval: "5s"
       timeout: "30s"
       retries: 3
