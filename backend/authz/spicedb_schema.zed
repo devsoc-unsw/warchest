@@ -1,48 +1,57 @@
 definition user {}
 
+
 definition organisation {
     relation treasurer: user
     relation exec: user | organisation#treasurer
     relation director: user | organisation#exec
     relation subcom: user | organisation#director
     
-    permission user_update_role = exec
-    permission user_remove = exec
-    permission event_create = exec
+    permission update_user_role = exec
+    permission remove_user = exec
+    permission create_event = exec
+    permission archive_event = exec
+    permission view_archive = exec
 }
 
-    
-definition event {
+definition warchest/event {
     relation org: organisation
     relation event_manager: user
     relation member: user
 
-    permission treasurer = org->treasurer
-    permission admin = org->director + event_manager
-    permission delete = org->exec + event_manager
-    permission request_budget = admin
-    permission assign_items = admin
-    permission edit_items = admin
-    permission view_budget = admin
-    permission archive = admin
-    permission view_archive = admin
+    // Role based permissions
+    permission is_member = member
+    permission is_exec = org->exec
+    permission is_treasurer = org->treasurer
+    permission assign_manager = is_exec
+    permission remove_manager = is_exec
 
-    permission edit_archive = org->exec
+    // Manage permissions such as delete event, requesting and viewing budget, creating line items and assigning / editing items
+    permission manage = event_manager + org->exec
+    permission manage_finances = is_treasurer
 
-    permission view = member + admin + event_manager
-    permission view_items = member + admin + event_manager
-    permission purchase_request = member + admin + event_manager
-
+    // General permissions
+    permission view_event = member + org->subcom + event_manager
+    permission view_items = member + org->director + event_manager
+    permission create_request = member + org->director + event_manager
 }
 
-//Budget Permissions: 
-definition budget {
-    relation event: event
+// Reimbursement Permissions:
+definition warchest/reimbursement {
+    relation event: warchest/event
+    relation requester: user
 
-    permission budget_allocate = event->treasurer
-    permission budget_request_accept = event->treasurer
-    permission budget_view_boards = event->treasurer  
-}  
+    permission is_requester = requester
+    permission view_request = is_requester + event->manage_finances + event->manage
+    permission cancel = is_requester
+    permission approve = event->manage_finances - requester
+}
 
 
-
+// Budget Permissions:
+definition warchest/budget {
+    relation event: warchest/event
+    permission allocate = event->manage_finances
+    permission accept_request = event->manage_finances
+    permission view_boards = event->manage_finances
+}

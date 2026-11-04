@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	"github.com/authzed/authzed-go/v1"
 )
 
@@ -35,8 +34,7 @@ func checkBobCanCreateEvents(ctx context.Context, client *authzed.Client) {
 		return
 	}
 
-	if result.Permissionship ==
-		v1.CheckPermissionResponse_PERMISSIONSHIP_HAS_PERMISSION {
+	if result {
 		log.Println("Bob can create events")
 	} else {
 		log.Println("Bob cannot create events")

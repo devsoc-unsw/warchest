@@ -26,7 +26,7 @@ services:
       warchest-tigerbeetle:
         condition: service_started
       warchest-spicedb:
-        condition: service_started
+        condition: service_healthy 
     security_opt:
       - seccomp:unconfined
 

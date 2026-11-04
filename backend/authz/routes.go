@@ -9,6 +9,19 @@ import (
 	"github.com/authzed/authzed-go/v1"
 )
 
+/*
+resourceType - The type of 'thing' being accessed, eg. document
+resourceID - The ID of a specific 'thing'
+relation - How the subject is connected to the resource, eg. viewer / editor / owner
+subjectType - The kind of 'thing' that has access, eg. user / director / subcom
+subjectID - The ID for that specific 'thing'
+*/
+
+// Pass in an array of relationships to make sure it happens in one go.
+// Allow it to take an array of relationships.
+// Debezium will make this redundant -> Whenever psql changes it will
+// put a request to kafak and rewrite it into psql.
+
 func WriteRelationship(
 	ctx context.Context,
 	client *authzed.Client,
@@ -24,6 +37,7 @@ func WriteRelationship(
 			ObjectId:   subjectID,
 		},
 	}
+
 	// Allows multiple individuals in a relation to be written to
 	if subjectRelation != "" {
 		ref.OptionalRelation = subjectRelation
@@ -52,17 +66,19 @@ func WriteRelationship(
 func CheckPermission(
 	ctx context.Context,
 	client *authzed.Client,
-	resourceType, resourceID, permission, subjectType, subjectID string,
-) (*v1.CheckPermissionResponse, error) {
+	resourceType ObjectType, resourceID string,
+	permission Permission,
+	subjectType ObjectType, subjectID string,
+) (bool, error) {
 	req := &v1.CheckPermissionRequest{
 		Resource: &v1.ObjectReference{
-			ObjectType: resourceType,
+			ObjectType: string(resourceType),
 			ObjectId:   resourceID,
 		},
-		Permission: permission,
+		Permission: string(permission),
 		Subject: &v1.SubjectReference{
 			Object: &v1.ObjectReference{
-				ObjectType: subjectType,
+				ObjectType: string(subjectType),
 				ObjectId:   subjectID,
 			},
 		},
@@ -74,24 +90,31 @@ func CheckPermission(
 	}
 
 	result, err := client.CheckPermission(ctx, req)
-	return result, err
+	if err != nil {
+		return false, err
+	}
+
+	return result.Permissionship ==
+		v1.CheckPermissionResponse_PERMISSIONSHIP_HAS_PERMISSION, nil
 }
 
 func DeleteRelationship(
 	ctx context.Context,
 	client *authzed.Client,
-	resourceType, resourceID, relation, subjectType, subjectID string,
+	resourceType ObjectType, resourceID string,
+	relation Relation,
+	subjectType ObjectType, subjectID string,
 ) (*v1.DeleteRelationshipsResponse, error) {
 	if resourceID == "" || relation == "" || subjectID == "" {
 		return nil, fmt.Errorf("resource / subject ID and relation cannot be empty")
 	}
 	req := &v1.DeleteRelationshipsRequest{
 		RelationshipFilter: &v1.RelationshipFilter{
-			ResourceType:       resourceType,
+			ResourceType:       string(resourceType),
 			OptionalResourceId: resourceID,
-			OptionalRelation:   relation,
+			OptionalRelation:   string(relation),
 			OptionalSubjectFilter: &v1.SubjectFilter{
-				SubjectType:       subjectType,
+				SubjectType:       string(subjectType),
 				OptionalSubjectId: subjectID,
 			},
 		},
@@ -107,13 +130,13 @@ func DeleteRelationship(
 func ReadRelationships(
 	ctx context.Context,
 	client *authzed.Client,
-	resourceType, resourceID, relation string,
+	resourceType ObjectType, resourceID string, relation Relation,
 ) ([]*v1.Relationship, error) {
 	req := &v1.ReadRelationshipsRequest{
 		RelationshipFilter: &v1.RelationshipFilter{
-			ResourceType:       resourceType,
+			ResourceType:       string(resourceType),
 			OptionalResourceId: resourceID,
-			OptionalRelation:   relation,
+			OptionalRelation:   string(relation),
 		},
 		Consistency: &v1.Consistency{
 			Requirement: &v1.Consistency_FullyConsistent{
@@ -146,14 +169,16 @@ func ReadRelationships(
 func LookupResources(
 	ctx context.Context,
 	client *authzed.Client,
-	resourceType, subjectType, subjectID, permission string,
+	subjectType ObjectType, subjectID string,
+	permission Permission,
+	resourceType ObjectType,
 ) ([]string, error) {
 	req := &v1.LookupResourcesRequest{
-		ResourceObjectType: resourceType,
-		Permission:         permission,
+		ResourceObjectType: string(resourceType),
+		Permission:         string(permission),
 		Subject: &v1.SubjectReference{
 			Object: &v1.ObjectReference{
-				ObjectType: subjectType,
+				ObjectType: string(subjectType),
 				ObjectId:   subjectID,
 			},
 		},
@@ -190,15 +215,17 @@ func LookupResources(
 func LookupSubjects(
 	ctx context.Context,
 	client *authzed.Client,
-	subjectType, resourceType, resourceID, permission string,
+	resourceType ObjectType, resourceID string,
+	permission Permission,
+	subjectType ObjectType,
 ) ([]string, error) {
 	req := &v1.LookupSubjectsRequest{
 		Resource: &v1.ObjectReference{
-			ObjectType: resourceType,
+			ObjectType: string(resourceType),
 			ObjectId:   resourceID,
 		},
-		Permission:        permission,
-		SubjectObjectType: subjectType,
+		Permission:        string(permission),
+		SubjectObjectType: string(subjectType),
 		Consistency: &v1.Consistency{
 			Requirement: &v1.Consistency_FullyConsistent{
 				FullyConsistent: true,
