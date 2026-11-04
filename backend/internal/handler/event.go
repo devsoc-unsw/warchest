@@ -1,0 +1,65 @@
+// receive HTTP requests and pass data to the service
+
+package handler
+
+import (
+	"backend/db"
+	"backend/internal/service"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+type EventHandler struct {
+	service service.EventService
+}
+
+func NewEventHandler(service service.EventService) *EventHandler {
+	return &EventHandler{service: service}
+}
+
+// JSON from frontend
+type createEventRequest struct {
+	Name        string         `json:"event_name"`
+	EventTime   time.Time      `json:"event_time"`
+	Budget      int64          `json:"budget"`
+	Status      db.EventStatus `json:"status"`
+	Location    string         `json:"location"`
+	Description string         `json:"description"`
+	SocietyID   string         `json:"society_id"`
+	CreatedBy   string         `json:"created_by"`
+}
+
+// read json, use EventService, return http code
+// parses the JSON request body into req
+func (h *EventHandler) CreateEvent(c *gin.Context) {
+	// declares a variable req createEventRequest
+	var req createEventRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	// := declare and assign
+	event, err := h.service.CreateEvent(
+		c.Request.Context(), // read context from http request
+		req.Name,
+		req.EventTime,
+		req.Budget,
+		req.Status,
+		req.Location,
+		req.Description,
+		req.SocietyID,
+		req.CreatedBy,
+	)
+
+	// check err
+	if err != nil {
+		// convert error type into a string
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// return 201, and created data.
+	c.JSON(http.StatusCreated, event)
+}

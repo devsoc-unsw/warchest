@@ -1,0 +1,37 @@
+-- +goose Up
+
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    sender_id UUID NOT NULL,
+    CONSTRAINT fk_sender_user
+        FOREIGN KEY (sender_id)
+        REFERENCES users(id)
+
+    recipient_id UUID NOT NULL,
+    CONSTRAINT fk_sender_user
+        FOREIGN KEY (recipient_id)
+        REFERENCES users(id)
+
+    description TEXT,
+    is_read BOOL NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+    event_id UUID,
+    portfolio_id UUID,
+    request_id UUID,
+
+    CONSTRAINT fk_notification_event
+        FOREIGN KEY (event_id)
+        REFERENCES events(id),
+
+    CONSTRAINT fk_notification_portfolio
+        FOREIGN KEY (portfolio_id)
+        REFERENCES events(id),
+
+    CONSTRAINT source
+        CHECK (num_nonnulls(fk_notification_event, fk_notification_portfolio)=1)
+);
+    
+-- +goose Down
+DROP TABLE notifications;
