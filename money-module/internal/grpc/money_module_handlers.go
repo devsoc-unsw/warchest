@@ -149,32 +149,124 @@ func (h *MoneyModuleHandler) CreateBudget(
 	ctx context.Context,
 	req *pb.CreateBudgetRequest,
 ) (*pb.WalletDetailsResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method CreateBudget not implemented")
+	if req.GetOwnerId().String() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id cannot be empty")
+	}
+	uuid := [16]byte(req.GetOwnerId().Value)
+	// forward to service layer
+	err := h.Svc.CreateBudget(ctx, uuid, req.BudgetName, req.OwnerType.String())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "User already exists")
+	}
+
+	out := &pb.WalletDetailsResponse{
+		OwnerType:  pb.OwnerType_USER,
+		OwnerId:    req.OwnerId,
+		WalletType: pb.WalletType_ACCOUNT,
+		WalletName: req.BudgetName,
+	}
+	return out, nil
 }
 
 func (h *MoneyModuleHandler) ReadBudget(
 	ctx context.Context,
 	req *pb.GetWalletDetailsRequest,
 ) (*pb.WalletDetailsResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method ReadBudget not implemented")
+	//TODO: Do not know what to do with req.state, unknownFields or cache size
+
+	if req.GetId().String() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id cannot be empty")
+	}
+	uuid := [16]byte(req.GetId().Value)
+	// forward to service layer
+
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadBudget(ctx, uuid)
+
+	if err != nil {
+		//TODO: Determine what the error code should be
+		return nil, status.Error(codes.Internal, "User already exists")
+	}
+
+	//TODO: What about state, unknown fields, size cache??
+	out := &pb.WalletDetailsResponse{
+		OwnerType:  ownerType,
+		WalletType: walletType,
+		WalletName: walletName,
+		Id:         req.Id,
+		IsArchived: isArchived,
+		OwnerId:    ownerId,
+	}
+	return out, nil
 }
 
 func (h *MoneyModuleHandler) UpdateBudget(
 	ctx context.Context,
 	req *pb.UpdateBudgetRequest,
 ) (*pb.WalletDetailsResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method UpdateBudget not implemented")
+	if req.GetId().String() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id cannot be empty")
+	}
+	uuid := [16]byte(req.GetId().Value)
+
+	err := h.Svc.UpdateBudget(ctx, uuid, req.OwnerType, req.OwnerId, req.WalletName)
+	if err != nil {
+		//TODO: Determine what the error code should be
+		return nil, status.Error(codes.Internal, "User already exists")
+	}
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadBudget(ctx, uuid)
+
+	if err != nil {
+		//TODO: Determine what the error code should be
+		return nil, status.Error(codes.Internal, "User already exists")
+	}
+
+	//TODO: What to do with req.state, unknown fields and sizeCache
+
+	//TODO: What about state, unknown fields, size cache??
+	out := &pb.WalletDetailsResponse{
+		OwnerType:  ownerType,
+		WalletType: walletType,
+		WalletName: walletName,
+		Id:         req.Id,
+		IsArchived: isArchived,
+		OwnerId:    ownerId,
+	}
+	return out, nil
 }
 
 func (h *MoneyModuleHandler) ArchiveBudget(
 	ctx context.Context,
 	req *pb.ArchiveWalletRequest,
 ) (*pb.WalletDetailsResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method ArchiveBudget not implemented")
+	if req.GetId().String() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id cannot be empty")
+	}
+	uuid := [16]byte(req.GetId().Value)
+
+	err := h.Svc.ArchiveBudget(ctx, uuid)
+	if err != nil {
+		//TODO: Determine what the error code should be
+		return nil, status.Error(codes.Internal, "User already exists")
+	}
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadBudget(ctx, uuid)
+
+	if err != nil {
+		//TODO: Determine what the error code should be
+		return nil, status.Error(codes.Internal, "User already exists")
+	}
+
+	//TODO: What to do with req.state, unknown fields and sizeCache
+
+	//TODO: What about state, unknown fields, size cache??
+	out := &pb.WalletDetailsResponse{
+		OwnerType:  ownerType,
+		WalletType: walletType,
+		WalletName: walletName,
+		Id:         req.Id,
+		IsArchived: isArchived,
+		OwnerId:    ownerId,
+	}
+	return out, nil
 }
 
 // Money routes
