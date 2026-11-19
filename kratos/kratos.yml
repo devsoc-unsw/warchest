@@ -1,0 +1,153 @@
+# this entire config is a stub so that auth isn't blocked
+version: v1.3.0
+
+dsn: postgres://postgres:password@mock-kratos-postgres:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+
+serve:
+  public:
+    base_url: http://localhost:4433/ # address of kratos backend 
+    cors:
+      enabled: true # enable cross-origin http requests
+      allowed_origins:
+        - http://localhost:3000
+        - http://localhost:4467
+        - http://localhost:8080
+      allowed_methods:
+        - POST
+        - GET
+        - PUT
+        - PATCH
+        - DELETE
+      allowed_headers:
+        - Authorization
+        - Cookie
+        - Content-Type
+        - X-Session-Token
+      exposed_headers:
+        - Content-Type
+        - Set-Cookie
+  admin:
+    base_url: http://mock-kratos:4434/ # address of admin kratos backend
+
+session:
+  whoami:
+    required_aal: aal1 # 1 factor auth, change tgo aal2 for 2fa.
+
+selfservice:
+  default_browser_return_url: http://localhost:4467/ #if there isn't an allowed call back we return here, probs the devgsoc central hub, we could just always redirect to warchest 
+  allowed_return_urls: # allow list of urls which we can redirect to
+    - http://localhost:3000
+    - http://localhost:3000/Callback # Frontend callback
+
+  methods: # the methods which we can use to login
+    password: # enables password to be used to login
+      enabled: true
+    # TODO: Enable once Google OIDC credentials are configured
+    oidc:
+      enabled: false
+      config:
+        providers:
+          - id: google
+            provider: google
+            client_id: DEV_GOOGLE_CLIENT_ID 
+            client_secret: DEV_GOOGLE_CLIENT_SECRET
+            mapper_url: file:///etc/config/kratos/oidc.google.jsonnet
+
+    # webauthn: # is for yubikey/physical keys, stubbing out for now
+    #   enabled: true
+    #   config:
+    #     passwordless: true
+    #     rp:
+    #       display_name: DevSoc Auth
+    #       # Set 'id' to the top-level domain.
+    #       id: localhost
+    #       # Set 'origin' to the exact URL of the page that prompts the user to use WebAuthn. You must include the scheme, host, and port.
+    #       origin: http://localhost:4467
+
+    # passkey: # 2fa passkeys stubbing out for now
+    #   enabled: true
+    #   config:
+    #     rp:
+    #       display_name: Your Application name
+    #       # Set 'id' to the top-level domain.
+    #       id: localhost
+    #       # Set 'origin' to the exact URL of the page that prompts the user to use WebAuthn. You must include the scheme, host, and port.
+    #       origins:
+    #         - http://localhost:4467
+
+    # code: # passwordless otp, stubbing out for now
+    #   enabled: true
+
+  flows:
+    error:
+      ui_url: http://localhost:4467/error # on unrecoverable error redirects to this page
+
+    settings:
+      ui_url: http://localhost:4467/settings # url to let user manage their details
+      privileged_session_max_age: 15m
+      required_aal: aal1
+
+    recovery:
+      enabled: true
+      ui_url: http://localhost:4467/recovery # password recover flows
+      use: code # code -> send an otp for recovery instead of a magic link
+
+    verification:
+      enabled: false # enable in prod, validates emails are real when set to true
+      ui_url: http://localhost:4467/verification
+      use: code
+      after:
+        default_browser_return_url: http://localhost:4467/
+
+    logout:
+      after:
+        default_browser_return_url: http://localhost:4467/login
+
+    login:
+      ui_url: http://localhost:4467/login # the page used to login
+      lifespan: 10m
+
+    registration:
+      enable_legacy_one_step: false
+      lifespan: 10m
+      ui_url: http://localhost:4467/registration # page used to register a new user
+      after:
+        passkey:
+          hooks:
+            - hook: session
+        webauthn:
+          hooks:
+            - hook: session
+        password:
+          hooks:
+            - hook: session
+            - hook: show_verification_ui
+
+log:
+  level: debug
+  format: text
+  leak_sensitive_values: true
+
+secrets:
+  cookie:
+    - PLEASE-CHANGE-ME-I-AM-VERY-INSECURE
+  cipher:
+    - 32-LONG-SECRET-NOT-SECURE-AT-ALL
+
+ciphers:
+  algorithm: xchacha20-poly1305
+
+hashers:
+  algorithm: bcrypt
+  bcrypt:
+    cost: 8
+
+identity:
+  default_schema_id: default
+  schemas:
+    - id: default
+      url: file:///etc/config/kratos/identity.schema.json
+
+courier:
+  smtp: # change out to proper server in prod
+    connection_uri: smtp://mailpit:1025/?skip_ssl_verify=true

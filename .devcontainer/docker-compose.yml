@@ -7,6 +7,7 @@ services:
     ports:
       # expose ports (3000 computer <-> 3000 on the container)
       - "3000:3000"
+      - "8080:8080"
     volumes:
       - ../:/root/warchest
     environment:
@@ -14,6 +15,10 @@ services:
       - BE_DATABASE_URL=postgres://postgres:password@warchest-postgres-be:5432/warchest
       - MM_DATABASE_URL=postgres://postgres:password@warchest-postgres-mm:5432/money_module
       - TIGERBEETLE_ADDRESS=tigerbeetle:3000
+      - BE_PORT=8080
+      - FRONTEND_URL=http://localhost:3000
+      - KRATOS_INTERNAL_URL=http://mock-kratos:4433
+      - KRATOS_PUBLIC_URL=http://localhost:4433
     networks:
       - devsoc-network
     depends_on:
@@ -37,7 +42,7 @@ services:
     volumes:
       - postgres_be_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -53,7 +58,7 @@ services:
     volumes:
       - postgres_mm_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -68,9 +73,10 @@ services:
       - tigerbeetle_data:/data
     security_opt:
       - seccomp:unconfined
+
   mock-spicedb:
     container_name: "spicedb"
-    image: authzed/spicedb:v1.39.0 
+    image: authzed/spicedb:v1.39.0
     command: "serve"
     restart: "no"
     ports:
@@ -88,15 +94,68 @@ services:
       - "SPICEDB_STREAMING_API_RESPONSE_DELAY_TIMEOUT=0s"
       - "SPICEDB_ENABLE_PERFORMANCE_INSIGHT_METRICS=true"
     healthcheck:
-      test: ["CMD", "/bin/grpc_health_probe", "-addr=localhost:50051"]
+      test: [ "CMD", "/bin/grpc_health_probe", "-addr=localhost:50051" ]
       interval: "5s"
       timeout: "30s"
       retries: 3
- 
+
+  # compose task to automatically perform a db migration on kratos
+  kratos-migrate:
+    image: oryd/kratos:v1.3.0
+    environment:
+      - DSN=postgres://postgres:password@mock-kratos-postgres:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+    volumes:
+      - ../kratos:/etc/config/kratos:ro #path to our kratos configs
+    command: -c /etc/config/kratos/kratos.yml migrate sql -e --yes #path to kratos.yml
+    networks:
+      - devsoc-network
+    depends_on:
+      mock-kratos-postgres:
+        condition: service_healthy
+
+  # instance of kratos (this is only for dev, so we can keep it minimal)
+  mock-kratos:
+    image: oryd/kratos:v1.3.0
+    environment:
+      - DSN=postgres://postgres:password@mock-kratos-postgres:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+    depends_on:
+      kratos-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "4433:4433" # Public API
+      - "4434:4434" # Admin API (This port should be internal ONLY)
+      # Port 4467 is reserved for the separate Kratos self-service UI container/process
+    volumes:
+      - ../kratos:/etc/config/kratos:ro
+    command: serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
+    restart: unless-stopped
+    networks:
+      - devsoc-network
+
+  # postgres for that kratos instance
+  mock-kratos-postgres:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=kratos
+    ports:
+      - "6767:5432"
+    networks:
+      - devsoc-network
+    volumes:
+      - kratos_postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_be_data:
   postgres_mm_data:
   tigerbeetle_data:
+  kratos_postgres_data:
 
 networks:
   devsoc-network:
