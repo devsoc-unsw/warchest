@@ -2,14 +2,15 @@ package main
 
 import (
 	ctx "context"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"time"
 
-	service "money-module/internal/service"
-
+	constants "money-module/internal/config"
 	handlers "money-module/internal/grpc"
+	service "money-module/internal/service"
 
 	pb "warchest/protos/mm_pb"
 
@@ -28,6 +29,39 @@ func init_tb() (tb.Client, error) {
 	if err != nil {
 		log.Printf("Error creating client: %s", err)
 		return nil, err
+	}
+
+	// boot-strap system accounts
+	var systemAccounts []tb.Account = []tb.Account{
+		{
+			ID:     constants.GetRealLedgerLiquidityBookId(),
+			Ledger: constants.RealAccountLedger,
+			Code:   constants.RealAccountCode,
+		},
+		{
+			ID:     constants.GetRealLedgerWorldBookId(),
+			Ledger: constants.RealAccountLedger,
+			Code:   constants.RealAccountCode,
+		},
+		{
+			ID:     constants.GetVirtualLedgerLiquidityBookId(),
+			Ledger: constants.VirtualAccountLedger,
+			Code:   constants.VirtualAccountCode,
+		},
+	}
+	results, err := client.CreateAccounts(systemAccounts)
+
+	if err != nil {
+		log.Printf("Error creating accounts: %v", err)
+		return nil, err
+	}
+
+	for _, result := range results {
+		// If the account already exists or it has been created we are fine
+		if result.Status != tb.AccountExists && result.Status != tb.AccountCreated {
+			client.Close()
+			return nil, fmt.Errorf("Issue with world account creating accounts: %v", result.Status.String())
+		}
 	}
 	return client, nil
 }
