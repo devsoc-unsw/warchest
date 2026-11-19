@@ -5,8 +5,8 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
 
+	constants "money-module/internal/config"
 	"money-module/internal/service"
 	pb "warchest/protos/mm_pb"
 )
@@ -29,7 +29,7 @@ func (h *MoneyModuleHandler) CreateAccount(
 	}
 	uuid := [16]byte(req.GetOwnerId().Value)
 	// forward to service layer
-	err := h.Svc.CreateAccount(ctx, uuid, req.BudgetName, req.OwnerType.String())
+	err := h.Svc.CreateAccount(ctx, uuid, req.BudgetName, req.OwnerType.String(), constants.ACCOUNT)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
@@ -55,7 +55,7 @@ func (h *MoneyModuleHandler) ReadAccount(
 	uuid := [16]byte(req.GetId().Value)
 	// forward to service layer
 
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.ACCOUNT)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -69,7 +69,7 @@ func (h *MoneyModuleHandler) ReadAccount(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    ownerId,
+		OwnerId:    &ownerId,
 	}
 	return out, nil
 }
@@ -84,12 +84,12 @@ func (h *MoneyModuleHandler) UpdateAccount(
 	}
 	uuid := [16]byte(req.GetId().Value)
 
-	err := h.Svc.UpdateAccount(ctx, uuid, req.OwnerType, req.OwnerId, req.WalletName)
+	err := h.Svc.UpdateDetails(ctx, uuid, req.OwnerType, req.OwnerId, req.WalletName, constants.ACCOUNT)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetAccountData(ctx, uuid)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.ACCOUNT)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -105,7 +105,7 @@ func (h *MoneyModuleHandler) UpdateAccount(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    ownerId,
+		OwnerId:    &ownerId,
 	}
 	return out, nil
 }
@@ -119,12 +119,12 @@ func (h *MoneyModuleHandler) ArchiveAccount(
 	}
 	uuid := [16]byte(req.GetId().Value)
 
-	err := h.Svc.ArchiveAccount(ctx)
+	err := h.Svc.ArchiveAccount(ctx, constants.ACCOUNT)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetAccountData(ctx, uuid)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.ACCOUNT)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -140,7 +140,7 @@ func (h *MoneyModuleHandler) ArchiveAccount(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    ownerId,
+		OwnerId:    &ownerId,
 	}
 	return out, nil
 }
@@ -154,7 +154,7 @@ func (h *MoneyModuleHandler) CreateBudget(
 	}
 	uuid := [16]byte(req.GetOwnerId().Value)
 	// forward to service layer
-	err := h.Svc.CreateBudget(ctx, uuid, req.BudgetName, req.OwnerType.String())
+	err := h.Svc.CreateAccount(ctx, uuid, req.BudgetName, req.OwnerType.String(), constants.BUDGET)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
@@ -180,7 +180,7 @@ func (h *MoneyModuleHandler) ReadBudget(
 	uuid := [16]byte(req.GetId().Value)
 	// forward to service layer
 
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadBudget(ctx, uuid)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadDetails(ctx, uuid, constants.BUDGET)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -194,7 +194,7 @@ func (h *MoneyModuleHandler) ReadBudget(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    ownerId,
+		OwnerId:    &ownerId,
 	}
 	return out, nil
 }
@@ -208,12 +208,12 @@ func (h *MoneyModuleHandler) UpdateBudget(
 	}
 	uuid := [16]byte(req.GetId().Value)
 
-	err := h.Svc.UpdateBudget(ctx, uuid, req.OwnerType, req.OwnerId, req.WalletName)
+	err := h.Svc.UpdateDetails(ctx, uuid, req.OwnerType, req.OwnerId, req.WalletName, constants.BUDGET)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadBudget(ctx, uuid)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadDetails(ctx, uuid, constants.BUDGET)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -229,7 +229,7 @@ func (h *MoneyModuleHandler) UpdateBudget(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    ownerId,
+		OwnerId:    &ownerId,
 	}
 	return out, nil
 }
@@ -243,12 +243,12 @@ func (h *MoneyModuleHandler) ArchiveBudget(
 	}
 	uuid := [16]byte(req.GetId().Value)
 
-	err := h.Svc.ArchiveBudget(ctx, uuid)
+	err := h.Svc.ArchiveAccount(ctx, uuid, constants.BUDGET)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadBudget(ctx, uuid)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.BUDGET)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -264,7 +264,7 @@ func (h *MoneyModuleHandler) ArchiveBudget(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    ownerId,
+		OwnerId:    &ownerId,
 	}
 	return out, nil
 }
@@ -274,48 +274,99 @@ func (h *MoneyModuleHandler) PayAccountFromBudget(
 	ctx context.Context,
 	req *pb.PaymentRequest,
 ) (*pb.PaymentResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method PayAccountFromBudget not implemented")
+
+	/*	state         protoimpl.MessageState `protogen:"open.v1"`
+		TransactionId *UUID                  `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+		Status        Status                 `protobuf:"varint,2,opt,name=status,proto3,enum=money_module.Status" json:"status,omitempty"`
+		unknownFields protoimpl.UnknownFields
+		sizeCache     protoimpl.SizeCache
+	*/
+
+	transaction_id, status, err := h.Svc.Transaction(req.PayerId, req.PayeeId, req.Amount, constants.ACCOUNT, constants.BUDGET)
+
+	if err != nil {
+		return err
+	}
+
+	return &pb.PaymentResponse{
+		TransactionId: transaction_id,
+		Status:        status,
+	}, nil
 }
 
 func (h *MoneyModuleHandler) PayBudgetFromAccount(
 	ctx context.Context,
 	req *pb.PaymentRequest,
 ) (*pb.PaymentResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method PayBudgetFromAccount not implemented")
+	transaction_id, status, err := h.Svc.Transaction(req.PayerId, req.PayeeId, req.Amount, constants.BUDGET, constants.ACCOUNT)
+
+	if err != nil {
+		return err
+	}
+
+	return &pb.PaymentResponse{
+		TransactionId: transaction_id,
+		Status:        status,
+	}, nil
 }
 
 func (h *MoneyModuleHandler) PayRootFromAccount(
 	ctx context.Context,
 	req *pb.RootPaymentRequest,
 ) (*pb.PaymentResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method PayRootFromAccount not implemented")
+	transaction_id, status, err := h.Svc.Transaction(req.PayerId, req.PayeeId, req.Amount, constants.ROOT, constants.ACCOUNT)
+
+	if err != nil {
+		return err
+	}
+
+	return &pb.PaymentResponse{
+		TransactionId: transaction_id,
+		Status:        status,
+	}, nil
 }
 
 func (h *MoneyModuleHandler) PayAccountFromRoot(
 	ctx context.Context,
 	req *pb.RootPaymentRequest,
 ) (*pb.PaymentResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method PayAccountFromRoot not implemented")
+	transaction_id, status, err := h.Svc.Transaction(req.PayerId, req.PayeeId, req.Amount, constants.ACCOUNT, constants.ROOT)
+
+	if err != nil {
+		return err
+	}
+
+	return &pb.PaymentResponse{
+		TransactionId: transaction_id,
+		Status:        status,
+	}, nil
 }
 
 func (h *MoneyModuleHandler) SendBetweenBudgets(
 	ctx context.Context,
 	req *pb.SendRequest,
 ) (*pb.SendResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method SendBetweenBudgets not implemented")
+	transaction_id, status, err := h.Svc.Transaction(req.PayerId, req.PayeeId, req.Amount, constants.BUDGET, constants.BUDGET)
+
+	if err != nil {
+		return err
+	}
+
+	return &pb.SendResponse{
+		TransactionId: transaction_id,
+		Status:        status,
+	}, nil
 }
 
 func (h *MoneyModuleHandler) GetAccountTransfers(
 	ctx context.Context,
 	req *pb.TransfersRequest,
 ) (*pb.TransfersResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method GetAccountTransfers not implemented")
+	transfers, err := h.Svc.getTransferrs(req.Id, constants.ACCOUNT)
+	if err != nil {
+		return err
+	}
+	return &pb.TransfersResponse{Transfers: transfers}, nil
 }
 
 func (h *MoneyModuleHandler) GetBudgetTransfers(
@@ -326,10 +377,11 @@ func (h *MoneyModuleHandler) GetBudgetTransfers(
 		codes.Unimplemented, "method GetBudgetTransfers not implemented")
 }
 
-func (h *MoneyModuleHandler) GetSocietyTransfers(
-	ctx context.Context,
-	req *emptypb.Empty,
-) (*pb.TransfersResponse, error) {
-	return nil, status.Error(
-		codes.Unimplemented, "method GetSocietyTransfers not implemented")
-}
+//TODO: Check this function doesn't have to be implemented
+// func (h *MoneyModuleHandler) GetSocietyTransfers(
+// 	ctx context.Context,
+// 	req *emptypb.Empty,
+// ) (*pb.TransfersResponse, error) {
+// 	return nil, status.Error(
+// 		codes.Unimplemented, "method GetSocietyTransfers not implemented")
+// }

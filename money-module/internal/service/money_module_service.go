@@ -22,7 +22,7 @@ type AccountService interface {
 	CreateAccount(ctx context.Context, uuid tb.Uint128) error
 }
 
-func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string) error {
+func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string, accountType constants.AccountType) error {
 	var pgOwnerType db.OwnerType
 	err := pgOwnerType.Scan(ownerType)
 	if err != nil {
@@ -57,35 +57,53 @@ func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, 
 	return nil
 }
 
-func (MMS MoneyModuleService) ReadAccount(ctx context.Context, uuid [16]byte) (string, [16]byte, pb.WalletType, string, bool, error) {
+// TODO: Assert that we actually get a budget/account back
+func (MMS MoneyModuleService) GetDetails(ctx context.Context, uuid [16]byte, accountType constants.AccountType) (pb.OwnerType, pb.UUID, pb.WalletType, string, bool, error) {
 	queries := db.New(MMS.Pg)
 
 	account, err := queries.ReadAccount(ctx, pgtype.UUID{Bytes: uuid, Valid: true})
 	if err != nil {
-		return "", [16]byte{}, pb.WalletType_ACCOUNT, "", false, err
+		return pb.OwnerType_USER, pb.UUID{}, pb.WalletType_BUDGET, "", false, err
 	}
 
 	//ownerType, ownerId, walletType, walletName, isArchived, err
 	//TODO: Determine how to check if archived
-	return account.AccountName, account.OwnerID.Bytes, pb.WalletType_ACCOUNT, account.AccountName, false, nil
+	return account.OwnerType, account.OwnerID.Bytes, pb.WalletType_BUDGET, account.AccountName, false, nil
 
 }
 
-func (MMS MoneyModuleService) ReadBudget(ctx context.Context, uuid [16]byte) (string, [16]byte, pb.WalletType, string, bool, error) {
-	queries := db.New(MMS.Pg)
+func (MMS MoneyModuleService) UpdateDetails(ctx context.Context, uuid [16]byte, ownerType string, onwerId [16]byte, walletName string, accountType constants.AccountType) error {
+	//TODO: Do not know what to do here
+}
 
-	account, err := queries.ReadAccount(ctx, pgtype.UUID{Bytes: uuid, Valid: true})
-	if err != nil {
-		return "", [16]byte{}, pb.WalletType_BUDGET, "", false, err
-	}
+//transaction_id, status, err := h.Svc.Transaction(req.PayeeId, req.PayerId, req.Amount, false, true)
 
-	//ownerType, ownerId, walletType, walletName, isArchived, err
-	//TODO: Determine how to check if archived
-	return account.AccountName, account.OwnerID.Bytes, pb.WalletType_BUDGET, account.AccountName, false, nil
+// TODO: Check return values for this function
+func (MMS MoneyModuleService) Transaction(payer_id [16]byte, payee_id [16]byte, amount uint64, PayerType constants.AccountType, PayeeType constants.AccountType) ([16]byte, status, error) {
+
+	/*type Transfer struct {
+		ID              Uint128
+		DebitAccountID  Uint128
+		CreditAccountID Uint128
+		Amount          Uint128
+		PendingID       Uint128
+		UserData128     Uint128
+		UserData64      uint64
+		UserData32      uint32
+		Timeout         uint32
+		Ledger          uint32
+		Code            uint16
+		Flags           uint16
+		Timestamp       uint64
+	}*/
+	NewTransfer := tb.Transfer{}
+
+	var transfers = []tb.Account{NewTransfer}
+	MMS.Tb.CreateTransfers(transfers)
 
 }
 
-func (MMS MoneyModuleService) UpdateAccount(ctx context.Context, uuid [16]byte) {
-	queries := db.New(MMS.Pg)
+func (MMS MoneyModuleService) GetTransfers(ctx context.Context, uuid [16]byte, accountType constants.AccountType) ([]tb.Transfer, error) {
+	//TODO: Finish
 
 }
