@@ -19,6 +19,8 @@ const (
 	TransactionSuccess TransactionStatus = iota
 	TransactionInvalidAmount
 	TransactionSameAccount
+	TransactionAccountNotFound
+	TransactionAccountArchived
 	TransactionPayerNotFound
 	TransactionPayeeNotFound
 	TransactionPayerArchived
@@ -38,6 +40,10 @@ func (s TransactionStatus) String() string {
 		return "INVALID_AMOUNT"
 	case TransactionSameAccount:
 		return "SAME_ACCOUNT"
+	case TransactionAccountNotFound:
+		return "ACCOUNT_NOT_FOUND"
+	case TransactionAccountArchived:
+		return "ACCOUNT_ARCHIVED"
 	case TransactionPayerNotFound:
 		return "PAYER_NOT_FOUND"
 	case TransactionPayeeNotFound:

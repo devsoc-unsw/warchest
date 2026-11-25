@@ -52,7 +52,8 @@ type TransactionService interface {
 	BudgetToBudget(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
 	RootAccountToAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
 	AccountToRootAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
-	GetAllAccou
+	GetAllAccountTransfers(ctx context.Context, accountUuid [16]byte) ([]tb.Transfer, constants.TransactionStatus, error)
+	GetAllBudgetTransfers(ctx context.Context, budgetUuid [16]byte) ([]tb.Transfer, constants.TransactionStatus, error)
 }
 
 func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string, accountType constants.AccountType) error {
@@ -157,7 +158,39 @@ func (MMS MoneyModuleService) AccountToRootAccount(ctx context.Context, accountU
 	return MMS.sameLedgerTransfer(ctx, accountUuid, constants.GetRealLedgerWorldBookId().Bytes(), amount, db.AccountTypeREAL, constants.RealAccountLedger, constants.RealAccountCode)
 }
 
+func (MMS MoneyModuleService) GetAllAccountTransfers(ctx context.Context, accountUuid [16]byte) ([]tb.Transfer, constants.TransactionStatus, error) {
+	return MMS.getAccountTransfers(ctx, accountUuid, db.AccountTypeREAL, "account")
+}
+
+func (MMS MoneyModuleService) GetAllBudgetTransfers(ctx context.Context, budgetUuid [16]byte) ([]tb.Transfer, constants.TransactionStatus, error) {
+	return MMS.getAccountTransfers(ctx, budgetUuid, db.AccountTypeVIRTUAL, "budget")
+}
+
 // --- Shared Transaction Helpers ---
+
+func (MMS MoneyModuleService) getAccountTransfers(
+	ctx context.Context,
+	id [16]byte,
+	expectedType db.AccountType,
+	role string,
+) ([]tb.Transfer, constants.TransactionStatus, error) {
+	if status, err := MMS.validateAccount(ctx, id, expectedType, role, constants.TransactionAccountNotFound, constants.TransactionAccountArchived); err != nil {
+		return nil, status, err
+	}
+
+	transfers, err := MMS.Tb.GetAccountTransfers(tb.AccountFilter{
+		AccountID: tb.BytesToUint128(id),
+		Limit:     8189,
+		Flags: tb.AccountFilterFlags{
+			Debits:  true,
+			Credits: true,
+		}.ToUint32(),
+	})
+	if err != nil {
+		return nil, constants.TransactionInternalError, fmt.Errorf("failed to fetch %s transfers: %w", role, err)
+	}
+	return transfers, constants.TransactionSuccess, nil
+}
 
 // helper to validate that a transfer has valid arguments
 func validateTransferArgs(payer, payee [16]byte, amount uint64) (constants.TransactionStatus, error) {
@@ -170,9 +203,8 @@ func validateTransferArgs(payer, payee [16]byte, amount uint64) (constants.Trans
 	return constants.TransactionSuccess, nil
 }
 
-// helper to check that a transaction participant is in a valid state
-// i.e we are using an account that isn't archived and exists
-func (MMS MoneyModuleService) validateTransactionParticipant(
+// helper to check that an account/budget exists, is not archived, and matches expectedType
+func (MMS MoneyModuleService) validateAccount(
 	ctx context.Context,
 	id [16]byte,
 	expectedType db.AccountType,
@@ -219,10 +251,10 @@ func (MMS MoneyModuleService) sameLedgerTransfer(
 	if status, err := validateTransferArgs(payer, payee, amount); err != nil {
 		return [16]byte{}, status, err
 	}
-	if status, err := MMS.validateTransactionParticipant(ctx, payer, expectedType, "payer", constants.TransactionPayerNotFound, constants.TransactionPayerArchived); err != nil {
+	if status, err := MMS.validateAccount(ctx, payer, expectedType, "payer", constants.TransactionPayerNotFound, constants.TransactionPayerArchived); err != nil {
 		return [16]byte{}, status, err
 	}
-	if status, err := MMS.validateTransactionParticipant(ctx, payee, expectedType, "payee", constants.TransactionPayeeNotFound, constants.TransactionPayeeArchived); err != nil {
+	if status, err := MMS.validateAccount(ctx, payee, expectedType, "payee", constants.TransactionPayeeNotFound, constants.TransactionPayeeArchived); err != nil {
 		return [16]byte{}, status, err
 	}
 
@@ -261,12 +293,12 @@ func (MMS MoneyModuleService) crossLedgerTransfer(
 	if status, err := validateTransferArgs(fromID, toID, amount); err != nil {
 		return [16]byte{}, status, err
 	}
-	if status, err := MMS.validateTransactionParticipant(ctx, fromID, fromType, "payer", constants.TransactionPayerNotFound, constants.TransactionPayerArchived); err != nil {
+	if status, err := MMS.validateAccount(ctx, fromID, fromType, "payer", constants.TransactionPayerNotFound, constants.TransactionPayerArchived); err != nil {
 		return [16]byte{}, status, err
 	}
 	fromPool := MMS.mustReadLiquidityPool(ctx, fromPoolID, string(fromType))
 	toPool := MMS.mustReadLiquidityPool(ctx, toPoolID, string(toType))
-	if status, err := MMS.validateTransactionParticipant(ctx, toID, toType, "payee", constants.TransactionPayeeNotFound, constants.TransactionPayeeArchived); err != nil {
+	if status, err := MMS.validateAccount(ctx, toID, toType, "payee", constants.TransactionPayeeNotFound, constants.TransactionPayeeArchived); err != nil {
 		return [16]byte{}, status, err
 	}
 

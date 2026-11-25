@@ -9,6 +9,8 @@ import (
 	constants "money-module/internal/config"
 	"money-module/internal/service"
 	pb "warchest/protos/mm_pb"
+
+	tb "github.com/tigerbeetle/tigerbeetle-go"
 )
 
 type MoneyModuleHandler struct {
@@ -54,7 +56,7 @@ func (h *MoneyModuleHandler) ReadAccount(
 	uuid := [16]byte(req.GetId().Value)
 	// forward to service layer
 
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.ACCOUNT)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.ACCOUNT)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -83,12 +85,12 @@ func (h *MoneyModuleHandler) UpdateAccount(
 	uuid := [16]byte(req.GetId().Value)
 	owner_uuid := [16]byte(req.GetOwnerId().Value)
 
-	err := h.Svc.UpdateDetails(ctx, uuid, req.OwnerType.String(), owner_uuid, req.WalletName, constants.ACCOUNT)
+	err := h.Svc.UpdateAccount(ctx, uuid, req.OwnerType.String(), owner_uuid, req.WalletName, constants.ACCOUNT)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.ACCOUNT)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.ACCOUNT)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -115,12 +117,12 @@ func (h *MoneyModuleHandler) ArchiveAccount(
 	}
 	uuid := [16]byte(req.GetId().Value)
 
-	err := h.Svc.ArchiveAccount(ctx, uuid, constants.ACCOUNT)
+	err := h.Svc.ArchiveAccount(ctx, uuid)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.ACCOUNT)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.ACCOUNT)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -173,7 +175,7 @@ func (h *MoneyModuleHandler) ReadBudget(
 	uuid := [16]byte(req.GetId().Value)
 	// forward to service layer
 
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.BUDGET)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.BUDGET)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -201,12 +203,12 @@ func (h *MoneyModuleHandler) UpdateBudget(
 	uuid := [16]byte(req.GetId().Value)
 	owner_uuid := [16]byte(req.GetOwnerId().Value)
 
-	err := h.Svc.UpdateDetails(ctx, uuid, req.OwnerType.String(), owner_uuid, req.WalletName, constants.BUDGET)
+	err := h.Svc.UpdateAccount(ctx, uuid, req.OwnerType.String(), owner_uuid, req.WalletName, constants.BUDGET)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.BUDGET)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.BUDGET)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -233,12 +235,12 @@ func (h *MoneyModuleHandler) ArchiveBudget(
 	}
 	uuid := [16]byte(req.GetId().Value)
 
-	err := h.Svc.ArchiveAccount(ctx, uuid, constants.BUDGET)
+	err := h.Svc.ArchiveAccount(ctx, uuid)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.GetDetails(ctx, uuid, constants.BUDGET)
+	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.BUDGET)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -263,13 +265,22 @@ func parseUUID(u *pb.UUID, field string) ([16]byte, error) {
 	return [16]byte(u.GetValue()), nil
 }
 
+func toProtoStatus(txStatus constants.TransactionStatus) pb.Status {
+	switch txStatus {
+	case constants.TransactionSuccess:
+		return pb.Status_PASSED
+	default:
+		return pb.Status_FAILED
+	}
+}
+
 func toGRPCError(txStatus constants.TransactionStatus, err error) error {
 	switch txStatus {
 	case constants.TransactionInvalidAmount, constants.TransactionSameAccount, constants.TransactionInvalidAccountType:
 		return status.Error(codes.InvalidArgument, err.Error())
-	case constants.TransactionPayerNotFound, constants.TransactionPayeeNotFound:
+	case constants.TransactionAccountNotFound, constants.TransactionPayerNotFound, constants.TransactionPayeeNotFound:
 		return status.Error(codes.NotFound, err.Error())
-	case constants.TransactionPayerArchived, constants.TransactionPayeeArchived, constants.TransactionInsufficientFunds:
+	case constants.TransactionAccountArchived, constants.TransactionPayerArchived, constants.TransactionPayeeArchived, constants.TransactionInsufficientFunds:
 		return status.Error(codes.FailedPrecondition, err.Error())
 	default:
 		return status.Error(codes.Internal, err.Error())
@@ -292,12 +303,12 @@ func (h *MoneyModuleHandler) PayAccountFromBudget(
 
 	transactionID, txStatus, err := h.Svc.BudgetToAccount(ctx, accountUUID, budgetUUID, req.GetAmount())
 	if err != nil {
-		return &pb.PaymentResponse{Status: pb.Status_FAILED}, toGRPCError(txStatus, err)
+		return &pb.PaymentResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
 	}
 
 	return &pb.PaymentResponse{
 		TransactionId: &pb.UUID{Value: transactionID[:]},
-		Status:        pb.Status_PASSED,
+		Status:        toProtoStatus(txStatus),
 	}, nil
 }
 
@@ -305,17 +316,23 @@ func (h *MoneyModuleHandler) PayBudgetFromAccount(
 	ctx context.Context,
 	req *pb.PaymentRequest,
 ) (*pb.PaymentResponse, error) {
-	payer_uuid := [16]byte(req.GetPayerId().Value)
-	payee_uuid := [16]byte(req.GetPayeeId().Value)
-	transaction_id, status, err := h.Svc.AccountToBudget(ctx, payer_uuid, payee_uuid, req.Amount)
-
+	accountUUID, err := parseUUID(req.GetPayerId(), "payer_id")
 	if err != nil {
-		return &pb.PaymentResponse{}, err
+		return nil, err
+	}
+	budgetUUID, err := parseUUID(req.GetPayeeId(), "payee_id")
+	if err != nil {
+		return nil, err
+	}
+
+	transactionID, txStatus, err := h.Svc.AccountToBudget(ctx, accountUUID, budgetUUID, req.GetAmount())
+	if err != nil {
+		return &pb.PaymentResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
 	}
 
 	return &pb.PaymentResponse{
-		TransactionId: &pb.UUID{Value: transaction_id[:]},
-		Status:        pb.Status_PASSED,
+		TransactionId: &pb.UUID{Value: transactionID[:]},
+		Status:        toProtoStatus(txStatus),
 	}, nil
 }
 
@@ -323,17 +340,19 @@ func (h *MoneyModuleHandler) PayRootFromAccount(
 	ctx context.Context,
 	req *pb.RootPaymentRequest,
 ) (*pb.PaymentResponse, error) {
-	payee_uuid := [16]byte(req.GetNonRootId().Value)
-
-	transaction_id, status, err := h.Svc.Transaction(nil, &payee_uuid, req.Amount, constants.ROOT, constants.ACCOUNT)
-
+	accountUUID, err := parseUUID(req.GetNonRootId(), "non_root_id")
 	if err != nil {
-		return &pb.PaymentResponse{}, err
+		return nil, err
+	}
+
+	transactionID, txStatus, err := h.Svc.AccountToRootAccount(ctx, accountUUID, req.GetAmount())
+	if err != nil {
+		return &pb.PaymentResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
 	}
 
 	return &pb.PaymentResponse{
-		TransactionId: &pb.UUID{Value: transaction_id[:]},
-		Status:        status,
+		TransactionId: &pb.UUID{Value: transactionID[:]},
+		Status:        toProtoStatus(txStatus),
 	}, nil
 }
 
@@ -341,17 +360,19 @@ func (h *MoneyModuleHandler) PayAccountFromRoot(
 	ctx context.Context,
 	req *pb.RootPaymentRequest,
 ) (*pb.PaymentResponse, error) {
-	payer_uuid := [16]byte(req.GetNonRootId().Value)
-
-	transaction_id, status, err := h.Svc.Transaction(&payer_uuid, nil, req.Amount, constants.ACCOUNT, constants.ROOT)
-
+	accountUUID, err := parseUUID(req.GetNonRootId(), "non_root_id")
 	if err != nil {
-		return &pb.PaymentResponse{}, err
+		return nil, err
+	}
+
+	transactionID, txStatus, err := h.Svc.RootAccountToAccount(ctx, accountUUID, req.GetAmount())
+	if err != nil {
+		return &pb.PaymentResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
 	}
 
 	return &pb.PaymentResponse{
-		TransactionId: &pb.UUID{Value: transaction_id[:]},
-		Status:        status,
+		TransactionId: &pb.UUID{Value: transactionID[:]},
+		Status:        toProtoStatus(txStatus),
 	}, nil
 }
 
@@ -359,81 +380,73 @@ func (h *MoneyModuleHandler) SendBetweenBudgets(
 	ctx context.Context,
 	req *pb.SendRequest,
 ) (*pb.SendResponse, error) {
-	payer_uuid := [16]byte(req.GetPayerId().Value)
-	payee_uuid := [16]byte(req.GetPayeeId().Value)
-
-	transaction_id, status, err := h.Svc.Transaction(&payer_uuid, &payee_uuid, req.Amount, constants.BUDGET, constants.BUDGET)
-
+	payerUUID, err := parseUUID(req.GetPayerId(), "payer_id")
 	if err != nil {
-		return &pb.SendResponse{}, err
+		return nil, err
+	}
+	payeeUUID, err := parseUUID(req.GetPayeeId(), "payee_id")
+	if err != nil {
+		return nil, err
+	}
+
+	transactionID, txStatus, err := h.Svc.BudgetToBudget(ctx, payerUUID, payeeUUID, req.GetAmount())
+	if err != nil {
+		return &pb.SendResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
 	}
 
 	return &pb.SendResponse{
-		TransactionId: &pb.UUID{Value: transaction_id[:]},
-		Status:        status,
+		TransactionId: &pb.UUID{Value: transactionID[:]},
+		Status:        toProtoStatus(txStatus),
 	}, nil
+}
+
+func toProtoTransfers(transfers []tb.Transfer) []*pb.Transfer {
+	out := make([]*pb.Transfer, 0, len(transfers))
+	for _, transfer := range transfers {
+		id := transfer.ID.Bytes()
+		debit := transfer.DebitAccountID.Bytes()
+		credit := transfer.CreditAccountID.Bytes()
+		out = append(out, &pb.Transfer{
+			TransferId: &pb.UUID{Value: id[:]},
+			Sender:     &pb.UUID{Value: debit[:]},
+			Receiver:   &pb.UUID{Value: credit[:]},
+		})
+	}
+	return out
 }
 
 func (h *MoneyModuleHandler) GetAccountTransfers(
 	ctx context.Context,
 	req *pb.TransfersRequest,
 ) (*pb.TransfersResponse, error) {
-	uuid := [16]byte(req.GetId().Value)
-	transfers, err := h.Svc.GetTransfers(ctx, uuid, constants.ACCOUNT)
+	accountUUID, err := parseUUID(req.GetId(), "id")
 	if err != nil {
-		return &pb.TransfersResponse{}, err
+		return nil, err
 	}
 
-	var new_transfers []*pb.Transfer
-
-	for i := 0; i < len(transfers); i++ {
-		transfer := transfers[i]
-		id := transfer.ID.Bytes()
-		debit := transfer.DebitAccountID.Bytes()
-		credit := transfer.CreditAccountID.Bytes()
-		new_transfers = append(new_transfers, &pb.Transfer{
-			TransferId: &pb.UUID{Value: id[:]},
-			Sender:     &pb.UUID{Value: debit[:]},
-			Receiver:   &pb.UUID{Value: credit[:]},
-			//Description:transfer.,
-			//TODO: What to do about description
-
-		})
-
+	transfers, txStatus, err := h.Svc.GetAllAccountTransfers(ctx, accountUUID)
+	if err != nil {
+		return nil, toGRPCError(txStatus, err)
 	}
 
-	return &pb.TransfersResponse{Transfers: new_transfers}, nil
+	return &pb.TransfersResponse{Transfers: toProtoTransfers(transfers)}, nil
 }
 
 func (h *MoneyModuleHandler) GetBudgetTransfers(
 	ctx context.Context,
 	req *pb.TransfersRequest,
 ) (*pb.TransfersResponse, error) {
-	uuid := [16]byte(req.GetId().Value)
-	transfers, err := h.Svc.GetTransfers(ctx, uuid, constants.BUDGET)
+	budgetUUID, err := parseUUID(req.GetId(), "id")
 	if err != nil {
-		return &pb.TransfersResponse{}, err
+		return nil, err
 	}
 
-	var new_transfers []*pb.Transfer
-
-	for i := 0; i < len(transfers); i++ {
-		transfer := transfers[i]
-		id := transfer.ID.Bytes()
-		debit := transfer.DebitAccountID.Bytes()
-		credit := transfer.CreditAccountID.Bytes()
-		new_transfers = append(new_transfers, &pb.Transfer{
-			TransferId: &pb.UUID{Value: id[:]},
-			Sender:     &pb.UUID{Value: debit[:]},
-			Receiver:   &pb.UUID{Value: credit[:]},
-			//Description:transfer.,
-			//TODO: What to do about description
-
-		})
-
+	transfers, txStatus, err := h.Svc.GetAllBudgetTransfers(ctx, budgetUUID)
+	if err != nil {
+		return nil, toGRPCError(txStatus, err)
 	}
 
-	return &pb.TransfersResponse{Transfers: new_transfers}, nil
+	return &pb.TransfersResponse{Transfers: toProtoTransfers(transfers)}, nil
 }
 
 //TODO: Check this function doesn't have to be implemented
