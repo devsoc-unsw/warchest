@@ -13,6 +13,54 @@ const (
 	ACCOUNT AccountType = 2
 )
 
+type TransactionStatus int32
+
+const (
+	TransactionSuccess TransactionStatus = iota
+	TransactionInvalidAmount
+	TransactionSameAccount
+	TransactionPayerNotFound
+	TransactionPayeeNotFound
+	TransactionPayerArchived
+	TransactionPayeeArchived
+	TransactionInvalidAccountType
+	TransactionInsufficientFunds
+	TransactionDuplicateTransfer
+	TransactionTransferFailed
+	TransactionInternalError
+)
+
+func (s TransactionStatus) String() string {
+	switch s {
+	case TransactionSuccess:
+		return "SUCCESS"
+	case TransactionInvalidAmount:
+		return "INVALID_AMOUNT"
+	case TransactionSameAccount:
+		return "SAME_ACCOUNT"
+	case TransactionPayerNotFound:
+		return "PAYER_NOT_FOUND"
+	case TransactionPayeeNotFound:
+		return "PAYEE_NOT_FOUND"
+	case TransactionPayerArchived:
+		return "PAYER_ARCHIVED"
+	case TransactionPayeeArchived:
+		return "PAYEE_ARCHIVED"
+	case TransactionInvalidAccountType:
+		return "INVALID_ACCOUNT_TYPE"
+	case TransactionInsufficientFunds:
+		return "INSUFFICIENT_FUNDS"
+	case TransactionDuplicateTransfer:
+		return "DUPLICATE_TRANSFER"
+	case TransactionTransferFailed:
+		return "TRANSFER_FAILED"
+	case TransactionInternalError:
+		return "INTERNAL_ERROR"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 const VirtualAccountLedger uint32 = 69
 const VirtualAccountCode uint16 = 69
 

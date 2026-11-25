@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	db "money-module/db/postgres/generated"
 
 	pb "warchest/protos/mm_pb"
 
 	constants "money-module/internal/config"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	tb "github.com/tigerbeetle/tigerbeetle-go"
@@ -18,11 +21,23 @@ type MoneyModuleService struct {
 	Pg *pgxpool.Pool
 }
 
+// Public methods for modifying specific accounts
 type AccountService interface {
-	CreateAccount(ctx context.Context, uuid tb.Uint128) error
+	CreateAccount(ctx context.Context, uuid [16]byte) error
+	ReadAccount(ctx context.Context, uuid [16]byte, accountType constants.AccountType) (pb.OwnerType, pb.UUID, pb.WalletType, string, bool, error)
+	UpdateAccount(ctx context.Context, uuid [16]byte, ownerType string, owerId [16]byte, walletName string, accountType constants.AccountType) error
+	ArchiveAccount(ctx context.Context, uuid [16]byte) error
 }
 
-func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string) error {
+// Public methods for making a transaction.
+type TransactionService interface {
+	AccountToBudget(ctx context.Context, accountUuid [16]byte, budgetUuid [16]byte, amount uint64) error
+	BudgetToAccount(ctx context.Context, accountUuid [16]byte, budgetUuid [16]byte, amount uint64) error
+	AccountToAccount(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) (constants.TransactionStatus, error)
+	BudgetToBudget(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) error
+}
+
+func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string, accountType constants.AccountType) error {
 	var pgOwnerType db.OwnerType
 	err := pgOwnerType.Scan(ownerType)
 	if err != nil {
@@ -60,7 +75,7 @@ func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, 
 func toProtoOwnerType(t db.OwnerType) pb.OwnerType {
 	switch t {
 	case db.OwnerTypeUSER:
-		return pb.OwnerType_USER 
+		return pb.OwnerType_USER
 	case db.OwnerTypeORGANISATION:
 		return pb.OwnerType_ORG
 	default:
@@ -69,7 +84,8 @@ func toProtoOwnerType(t db.OwnerType) pb.OwnerType {
 }
 
 // TODO: Assert that we actually get a budget/account back
-func (MMS MoneyModuleService) GetDetails(ctx context.Context, uuid [16]byte, accountType constants.AccountType) (pb.OwnerType, pb.UUID, pb.WalletType, string, bool, error) {
+func (MMS MoneyModuleService) ReadAccount(ctx context.Context, uuid [16]byte, accountType constants.AccountType) (pb.OwnerType, pb.UUID, pb.WalletType, string, bool, error) {
+	//TODO: accountType not used
 	queries := db.New(MMS.Pg)
 
 	account, err := queries.ReadAccount(ctx, pgtype.UUID{Bytes: uuid, Valid: true})
@@ -82,39 +98,180 @@ func (MMS MoneyModuleService) GetDetails(ctx context.Context, uuid [16]byte, acc
 	return toProtoOwnerType(account.OwnerType), pb.UUID{Value: account.OwnerID.Bytes[:]}, pb.WalletType_BUDGET, account.AccountName, account.ArchivedAt.Valid, nil
 }
 
-func (MMS MoneyModuleService) UpdateDetails(ctx context.Context, uuid [16]byte, ownerType string, onwerId [16]byte, walletName string, accountType constants.AccountType) error {
-	//TODO: Do not know what to do here
-	
+func (MMS MoneyModuleService) UpdateAccount(ctx context.Context, uuid [16]byte, ownerType string, owerId [16]byte, walletName string, accountType constants.AccountType) error {
+	// Update the details of an account
+	return errors.New("Unimplemented")
 }
 
-//transaction_id, status, err := h.Svc.Transaction(req.PayeeId, req.PayerId, req.Amount, false, true)
+func (MMS MoneyModuleService) ArchiveAccount(ctx context.Context, uuid [16]byte) error {
+	//TODO: accountType not used
+	queries := db.New(MMS.Pg)
 
-// TODO: Check return values for this function
-func (MMS MoneyModuleService) Transaction(payer_id [16]byte, payee_id [16]byte, amount uint64, PayerType constants.AccountType, PayeeType constants.AccountType) ([16]byte, status, error) {
+	err := queries.ArchiveAccount(ctx, pgtype.UUID{Bytes: uuid, Valid: true})
 
-	/*type Transfer struct {
-		ID              Uint128
-		DebitAccountID  Uint128
-		CreditAccountID Uint128
-		Amount          Uint128
-		PendingID       Uint128
-		UserData128     Uint128
-		UserData64      uint64
-		UserData32      uint32
-		Timeout         uint32
-		Ledger          uint32
-		Code            uint16
-		Flags           uint16
-		Timestamp       uint64
-	}*/
-	NewTransfer := tb.Transfer{}
-
-	var transfers = []tb.Account{NewTransfer}
-	MMS.Tb.CreateTransfers(transfers)
-
+	return err
 }
 
-func (MMS MoneyModuleService) GetTransfers(ctx context.Context, uuid [16]byte, accountType constants.AccountType) ([]tb.Transfer, error) {
-	//TODO: Finish
+func (MMS MoneyModuleService) AccountToAccount(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) (constants.TransactionStatus, error) {
+	if amount == 0 {
+		return constants.TransactionInvalidAmount, errors.New("transfer amount must be greater than zero")
+	}
+	if payer == payee {
+		return constants.TransactionSameAccount, errors.New("payer and payee accounts must be different")
+	}
 
+	// query postgres for the tigerbeetle details to use
+	queries := db.New(MMS.Pg)
+
+	payerDetails, err := queries.ReadAccount(ctx, pgtype.UUID{Bytes: payer, Valid: true})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return constants.TransactionPayerNotFound, fmt.Errorf("payer account not found: %w", err)
+		}
+		return constants.TransactionInternalError, fmt.Errorf("failed to read payer account: %w", err)
+	}
+	if payerDetails.ArchivedAt.Valid {
+		return constants.TransactionPayerArchived, errors.New("payer account is archived")
+	}
+	if !payerDetails.AccountType.Valid {
+		panic("invariant violation: payer account_type is NULL in postgres")
+	}
+	if payerDetails.AccountType.AccountType != db.AccountTypeREAL {
+		return constants.TransactionInvalidAccountType, errors.New("payer is not a real account")
+	}
+
+	payeeDetails, err := queries.ReadAccount(ctx, pgtype.UUID{Bytes: payee, Valid: true})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return constants.TransactionPayeeNotFound, fmt.Errorf("payee account not found: %w", err)
+		}
+		return constants.TransactionInternalError, fmt.Errorf("failed to read payee account: %w", err)
+	}
+	if payeeDetails.ArchivedAt.Valid {
+		return constants.TransactionPayeeArchived, errors.New("payee account is archived")
+	}
+	if !payeeDetails.AccountType.Valid {
+		panic("invariant violation: payee account_type is NULL in postgres")
+	}
+	if payeeDetails.AccountType.AccountType != db.AccountTypeREAL {
+		return constants.TransactionInvalidAccountType, errors.New("payee is not a real account")
+	}
+
+	transfer := tb.Transfer{
+		ID:              tb.ID(),
+		DebitAccountID:  tb.BytesToUint128(payer),
+		CreditAccountID: tb.BytesToUint128(payee),
+		Amount:          tb.ToUint128(amount),
+		Ledger:          constants.RealAccountLedger,
+		Code:            constants.RealAccountCode,
+	}
+
+	transferResults, err := MMS.Tb.CreateTransfers([]tb.Transfer{transfer})
+	if err != nil {
+		return constants.TransactionInternalError, fmt.Errorf("failed to execute tigerbeetle transfer: %w", err)
+	}
+
+	if len(transferResults) != 1 {
+		panic(fmt.Sprintf("invariant violation: expected 1 tigerbeetle transfer result, got %d", len(transferResults)))
+	}
+
+	switch transferResults[0].Status {
+	case tb.TransferCreated:
+		return constants.TransactionSuccess, nil
+	case tb.TransferExceedsCredits, tb.TransferExceedsDebits:
+		return constants.TransactionInsufficientFunds, fmt.Errorf("insufficient funds: %s", transferResults[0].Status.String())
+	case tb.TransferDebitAccountNotFound,
+		tb.TransferCreditAccountNotFound,
+		tb.TransferDebitAccountAlreadyClosed,
+		tb.TransferCreditAccountAlreadyClosed,
+		tb.TransferAccountsMustHaveTheSameLedger,
+		tb.TransferTransferMustHaveTheSameLedgerAsAccounts:
+		panic(fmt.Sprintf("postgres/tigerbeetle desync: %s", transferResults[0].Status.String()))
+	case tb.TransferAccountsMustBeDifferent, tb.TransferExists:
+		panic(fmt.Sprintf("invariant violation: %s", transferResults[0].Status.String()))
+	default:
+		return constants.TransactionTransferFailed, fmt.Errorf("tigerbeetle transfer failed: %s", transferResults[0].Status.String())
+	}
+}
+
+func (MMS MoneyModuleService) BudgetToBudget(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) (constants.TransactionStatus, error) {
+	if amount == 0 {
+		return constants.TransactionInvalidAmount, errors.New("transfer amount must be greater than zero")
+	}
+	if payer == payee {
+		return constants.TransactionSameAccount, errors.New("payer and payee accounts must be different")
+	}
+
+	// query postgres for the tigerbeetle details to use
+	queries := db.New(MMS.Pg)
+
+	payerDetails, err := queries.ReadAccount(ctx, pgtype.UUID{Bytes: payer, Valid: true})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return constants.TransactionPayerNotFound, fmt.Errorf("payer account not found: %w", err)
+		}
+		return constants.TransactionInternalError, fmt.Errorf("failed to read payer account: %w", err)
+	}
+	if payerDetails.ArchivedAt.Valid {
+		return constants.TransactionPayerArchived, errors.New("payer account is archived")
+	}
+	if !payerDetails.AccountType.Valid {
+		panic("invariant violation: payer account_type is NULL in postgres")
+	}
+	if payerDetails.AccountType.AccountType != db.AccountTypeREAL {
+		return constants.TransactionInvalidAccountType, errors.New("payer is not a real account")
+	}
+
+	payeeDetails, err := queries.ReadAccount(ctx, pgtype.UUID{Bytes: payee, Valid: true})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return constants.TransactionPayeeNotFound, fmt.Errorf("payee account not found: %w", err)
+		}
+		return constants.TransactionInternalError, fmt.Errorf("failed to read payee account: %w", err)
+	}
+	if payeeDetails.ArchivedAt.Valid {
+		return constants.TransactionPayeeArchived, errors.New("payee account is archived")
+	}
+	if !payeeDetails.AccountType.Valid {
+		panic("invariant violation: payee account_type is NULL in postgres")
+	}
+	if payeeDetails.AccountType.AccountType != db.AccountTypeREAL {
+		return constants.TransactionInvalidAccountType, errors.New("payee is not a real account")
+	}
+
+	transfer := tb.Transfer{
+		ID:              tb.ID(),
+		DebitAccountID:  tb.BytesToUint128(payer),
+		CreditAccountID: tb.BytesToUint128(payee),
+		Amount:          tb.ToUint128(amount),
+		Ledger:          constants.VirtualAccountLedger,
+		Code:            constants.VirtualAccountCode,
+	}
+
+	transferResults, err := MMS.Tb.CreateTransfers([]tb.Transfer{transfer})
+	if err != nil {
+		return constants.TransactionInternalError, fmt.Errorf("failed to execute tigerbeetle transfer: %w", err)
+	}
+
+	if len(transferResults) != 1 {
+		panic(fmt.Sprintf("invariant violation: expected 1 tigerbeetle transfer result, got %d", len(transferResults)))
+	}
+
+	switch transferResults[0].Status {
+	case tb.TransferCreated:
+		return constants.TransactionSuccess, nil
+	case tb.TransferExceedsCredits, tb.TransferExceedsDebits:
+		return constants.TransactionInsufficientFunds, fmt.Errorf("insufficient funds: %s", transferResults[0].Status.String())
+	case tb.TransferDebitAccountNotFound,
+		tb.TransferCreditAccountNotFound,
+		tb.TransferDebitAccountAlreadyClosed,
+		tb.TransferCreditAccountAlreadyClosed,
+		tb.TransferAccountsMustHaveTheSameLedger,
+		tb.TransferTransferMustHaveTheSameLedgerAsAccounts:
+		panic(fmt.Sprintf("postgres/tigerbeetle desync: %s", transferResults[0].Status.String()))
+	case tb.TransferAccountsMustBeDifferent, tb.TransferExists:
+		panic(fmt.Sprintf("invariant violation: %s", transferResults[0].Status.String()))
+	default:
+		return constants.TransactionTransferFailed, fmt.Errorf("tigerbeetle transfer failed: %s", transferResults[0].Status.String())
+	}
 }
