@@ -52,6 +52,7 @@ type TransactionService interface {
 	BudgetToBudget(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
 	RootAccountToAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
 	AccountToRootAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
+	GetAllAccou
 }
 
 func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string, accountType constants.AccountType) error {
@@ -146,6 +147,14 @@ func (MMS MoneyModuleService) BudgetToAccount(ctx context.Context, accountUuid [
 		accountUuid, db.AccountTypeREAL, constants.RealAccountLedger, constants.RealAccountCode, constants.GetRealLedgerLiquidityBookId(),
 		amount,
 	)
+}
+
+func (MMS MoneyModuleService) RootAccountToAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error) {
+	return MMS.sameLedgerTransfer(ctx, constants.GetRealLedgerWorldBookId().Bytes(), accountUuid, amount, db.AccountTypeREAL, constants.RealAccountLedger, constants.RealAccountCode)
+}
+
+func (MMS MoneyModuleService) AccountToRootAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error) {
+	return MMS.sameLedgerTransfer(ctx, accountUuid, constants.GetRealLedgerWorldBookId().Bytes(), amount, db.AccountTypeREAL, constants.RealAccountLedger, constants.RealAccountCode)
 }
 
 // --- Shared Transaction Helpers ---
