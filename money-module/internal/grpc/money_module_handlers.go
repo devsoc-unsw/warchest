@@ -256,31 +256,48 @@ func (h *MoneyModuleHandler) ArchiveBudget(
 	return out, nil
 }
 
+func parseUUID(u *pb.UUID, field string) ([16]byte, error) {
+	if u == nil || len(u.GetValue()) != 16 {
+		return [16]byte{}, status.Errorf(codes.InvalidArgument, "%s must be a 16-byte UUID", field)
+	}
+	return [16]byte(u.GetValue()), nil
+}
+
+func toGRPCError(txStatus constants.TransactionStatus, err error) error {
+	switch txStatus {
+	case constants.TransactionInvalidAmount, constants.TransactionSameAccount, constants.TransactionInvalidAccountType:
+		return status.Error(codes.InvalidArgument, err.Error())
+	case constants.TransactionPayerNotFound, constants.TransactionPayeeNotFound:
+		return status.Error(codes.NotFound, err.Error())
+	case constants.TransactionPayerArchived, constants.TransactionPayeeArchived, constants.TransactionInsufficientFunds:
+		return status.Error(codes.FailedPrecondition, err.Error())
+	default:
+		return status.Error(codes.Internal, err.Error())
+	}
+}
+
 // Money routes
 func (h *MoneyModuleHandler) PayAccountFromBudget(
 	ctx context.Context,
 	req *pb.PaymentRequest,
 ) (*pb.PaymentResponse, error) {
-
-	/*	state         protoimpl.MessageState `protogen:"open.v1"`
-		TransactionId *UUID                  `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-		Status        Status                 `protobuf:"varint,2,opt,name=status,proto3,enum=money_module.Status" json:"status,omitempty"`
-		unknownFields protoimpl.UnknownFields
-		sizeCache     protoimpl.SizeCache
-	*/
-
-	payer_uuid := [16]byte(req.GetPayerId().Value)
-	payee_uuid := [16]byte(req.GetPayeeId().Value)
-
-	transaction_id, status, err := h.Svc.Transaction(&payer_uuid, &payee_uuid, req.Amount, constants.ACCOUNT, constants.BUDGET)
-
+	budgetUUID, err := parseUUID(req.GetPayerId(), "payer_id")
 	if err != nil {
-		return &pb.PaymentResponse{}, err
+		return nil, err
+	}
+	accountUUID, err := parseUUID(req.GetPayeeId(), "payee_id")
+	if err != nil {
+		return nil, err
+	}
+
+	transactionID, txStatus, err := h.Svc.BudgetToAccount(ctx, accountUUID, budgetUUID, req.GetAmount())
+	if err != nil {
+		return &pb.PaymentResponse{Status: pb.Status_FAILED}, toGRPCError(txStatus, err)
 	}
 
 	return &pb.PaymentResponse{
-		TransactionId: &pb.UUID{Value: transaction_id[:]},
-		Status:        status,
+		TransactionId: &pb.UUID{Value: transactionID[:]},
+		Status:        pb.Status_PASSED,
 	}, nil
 }
 
@@ -290,7 +307,7 @@ func (h *MoneyModuleHandler) PayBudgetFromAccount(
 ) (*pb.PaymentResponse, error) {
 	payer_uuid := [16]byte(req.GetPayerId().Value)
 	payee_uuid := [16]byte(req.GetPayeeId().Value)
-	transaction_id, status, err := h.Svc.Transaction(&payer_uuid, &payee_uuid, req.Amount, constants.BUDGET, constants.ACCOUNT)
+	transaction_id, status, err := h.Svc.AccountToBudget(ctx, payer_uuid, payee_uuid, req.Amount)
 
 	if err != nil {
 		return &pb.PaymentResponse{}, err
@@ -298,7 +315,7 @@ func (h *MoneyModuleHandler) PayBudgetFromAccount(
 
 	return &pb.PaymentResponse{
 		TransactionId: &pb.UUID{Value: transaction_id[:]},
-		Status:        status,
+		Status:        pb.Status_PASSED,
 	}, nil
 }
 
