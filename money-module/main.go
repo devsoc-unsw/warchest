@@ -32,7 +32,7 @@ func init_tb() (tb.Client, error) {
 	}
 
 	// boot-strap system accounts
-	var systemAccounts []tb.Account = []tb.Account{
+	systemAccounts := []tb.Account{
 		{
 			ID:     constants.GetRealLedgerLiquidityBookId(),
 			Ledger: constants.RealAccountLedger,
@@ -60,7 +60,10 @@ func init_tb() (tb.Client, error) {
 		// If the account already exists or it has been created we are fine
 		if result.Status != tb.AccountExists && result.Status != tb.AccountCreated {
 			client.Close()
-			return nil, fmt.Errorf("Issue with world account creating accounts: %v", result.Status.String())
+			return nil, fmt.Errorf(
+				"issue with world account creating accounts: %v",
+				result.Status.String(),
+			)
 		}
 	}
 	return client, nil
@@ -79,10 +82,10 @@ func main() {
 
 	dbPool, err := pgxpool.New(initCtx, dbURL)
 	if err != nil {
-		log.Fatalf("Failed to initalize Postgres Pool: %v", err)
+		log.Fatalf("Failed to initialise Postgres Pool: %v", err)
 	}
 	defer dbPool.Close()
-	if err := dbPool.Ping(initCtx); err != nil {
+	if err = dbPool.Ping(initCtx); err != nil {
 		log.Fatalf("Failed to ping Postgres: %v", err)
 	}
 
@@ -114,7 +117,7 @@ func main() {
 	}
 
 	log.Printf("MoneyModule gRPC server listening on :%s...", port)
-	if err := grpcServer.Serve(lis); err != nil {
+	if err = grpcServer.Serve(lis); err != nil {
 		log.Fatalf("gRPC server failed: %v", err)
 	}
 }

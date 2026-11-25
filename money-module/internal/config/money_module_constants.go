@@ -92,12 +92,15 @@ var (
 		0x80, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 	}
-	realLedgerWorldBookId        tb.Uint128 = tb.BytesToUint128(realLedgerWorldAccBookUUID)
-	realLedgerLiquidityBookId    tb.Uint128 = tb.BytesToUint128(realLedgerLiquidityBookUUID)
-	virtualLedgerLiquidityBookId tb.Uint128 = tb.BytesToUint128(virtualLedgerLiquidityBookUUID)
+	realLedgerWorldBookId        = tb.BytesToUint128(realLedgerWorldAccBookUUID)
+	realLedgerLiquidityBookId    = tb.BytesToUint128(realLedgerLiquidityBookUUID)
+	virtualLedgerLiquidityBookId = tb.BytesToUint128(virtualLedgerLiquidityBookUUID)
 )
 
-// golang 'const' keyword only works on primitives. So we expose getters and keep data private so the data cannot be modified
-func GetRealLedgerWorldBookId() tb.Uint128        { return realLedgerWorldBookId }
-func GetRealLedgerLiquidityBookId() tb.Uint128    { return realLedgerLiquidityBookId }
-func GetVirtualLedgerLiquidityBookId() tb.Uint128 { return virtualLedgerLiquidityBookId }
+// Go's 'const' keyword only works on primitives, so we keep data private
+// and expose getters so these IDs cannot be modified.
+func GetRealLedgerWorldBookId() tb.Uint128     { return realLedgerWorldBookId }
+func GetRealLedgerLiquidityBookId() tb.Uint128 { return realLedgerLiquidityBookId }
+func GetVirtualLedgerLiquidityBookId() tb.Uint128 {
+	return virtualLedgerLiquidityBookId
+}

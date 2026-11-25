@@ -15,8 +15,7 @@ import (
 	tb "github.com/tigerbeetle/tigerbeetle-go"
 )
 
-// to test our service layers, we provide mocks for our repo layers, based on their interfaces
-// We then used the mocked repo + our actual service logic
+// --- Fakes ---
 
 type fakeAccountStore struct {
 	accounts   map[[16]byte]db.Account
@@ -35,7 +34,10 @@ func newFakeAccountStore() *fakeAccountStore {
 	}
 }
 
-func (f *fakeAccountStore) CreateAccount(_ context.Context, arg db.CreateAccountParams) error {
+func (f *fakeAccountStore) CreateAccount(
+	_ context.Context,
+	arg db.CreateAccountParams,
+) error {
 	f.createdParams = append(f.createdParams, arg)
 	if f.createErr != nil {
 		return f.createErr
@@ -50,7 +52,10 @@ func (f *fakeAccountStore) CreateAccount(_ context.Context, arg db.CreateAccount
 	return nil
 }
 
-func (f *fakeAccountStore) ReadAccount(_ context.Context, id pgtype.UUID) (db.Account, error) {
+func (f *fakeAccountStore) ReadAccount(
+	_ context.Context,
+	id pgtype.UUID,
+) (db.Account, error) {
 	if err, ok := f.readErrors[id.Bytes]; ok {
 		return db.Account{}, err
 	}
@@ -61,7 +66,10 @@ func (f *fakeAccountStore) ReadAccount(_ context.Context, id pgtype.UUID) (db.Ac
 	return acc, nil
 }
 
-func (f *fakeAccountStore) ArchiveAccount(_ context.Context, id pgtype.UUID) error {
+func (f *fakeAccountStore) ArchiveAccount(
+	_ context.Context,
+	id pgtype.UUID,
+) error {
 	f.archivedIDs = append(f.archivedIDs, id.Bytes)
 	if f.archiveErr != nil {
 		return f.archiveErr
@@ -74,7 +82,7 @@ func (f *fakeAccountStore) ArchiveAccount(_ context.Context, id pgtype.UUID) err
 }
 
 type fakeTBClient struct {
-	tb.Client // embed interface so only used methods need to be implemented
+	tb.Client // embed interface so only used methods need implementation
 
 	createAccountsRes []tb.CreateAccountResult
 	createAccountsErr error
@@ -89,7 +97,9 @@ type fakeTBClient struct {
 	lastAccountFilter   tb.AccountFilter
 }
 
-func (f *fakeTBClient) CreateAccounts(accounts []tb.Account) ([]tb.CreateAccountResult, error) {
+func (f *fakeTBClient) CreateAccounts(
+	accounts []tb.Account,
+) ([]tb.CreateAccountResult, error) {
 	f.createdAccounts = append(f.createdAccounts, accounts...)
 	if f.createAccountsErr != nil {
 		return nil, f.createAccountsErr
@@ -97,7 +107,9 @@ func (f *fakeTBClient) CreateAccounts(accounts []tb.Account) ([]tb.CreateAccount
 	return f.createAccountsRes, nil
 }
 
-func (f *fakeTBClient) CreateTransfers(transfers []tb.Transfer) ([]tb.CreateTransferResult, error) {
+func (f *fakeTBClient) CreateTransfers(
+	transfers []tb.Transfer,
+) ([]tb.CreateTransferResult, error) {
 	f.createdTransfers = append(f.createdTransfers, transfers...)
 	if f.createTransfersErr != nil {
 		return nil, f.createTransfersErr
@@ -105,7 +117,9 @@ func (f *fakeTBClient) CreateTransfers(transfers []tb.Transfer) ([]tb.CreateTran
 	return f.createTransfersRes, nil
 }
 
-func (f *fakeTBClient) GetAccountTransfers(filter tb.AccountFilter) ([]tb.Transfer, error) {
+func (f *fakeTBClient) GetAccountTransfers(
+	filter tb.AccountFilter,
+) ([]tb.Transfer, error) {
 	f.lastAccountFilter = filter
 	if f.accountTransfersErr != nil {
 		return nil, f.accountTransfersErr
@@ -116,10 +130,17 @@ func (f *fakeTBClient) GetAccountTransfers(filter tb.AccountFilter) ([]tb.Transf
 // --- Helpers ---
 
 func testUUID(lastByte byte) [16]byte {
-	return [16]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x47, 0x88, 0x89, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, lastByte}
+	return [16]byte{
+		0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x47, 0x88,
+		0x89, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, lastByte,
+	}
 }
 
-func makeAccount(id [16]byte, accType db.AccountType, archived bool) db.Account {
+func makeAccount(
+	id [16]byte,
+	accType db.AccountType,
+	archived bool,
+) db.Account {
 	acc := db.Account{
 		ID:          pgtype.UUID{Bytes: id, Valid: true},
 		AccountType: db.NullAccountType{AccountType: accType, Valid: true},
@@ -131,6 +152,14 @@ func makeAccount(id [16]byte, accType db.AccountType, archived bool) db.Account 
 		acc.ArchivedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
 	}
 	return acc
+}
+
+func tbResults(statuses ...tb.CreateTransferStatus) []tb.CreateTransferResult {
+	out := make([]tb.CreateTransferResult, len(statuses))
+	for i, s := range statuses {
+		out[i] = tb.CreateTransferResult{Status: s}
+	}
+	return out
 }
 
 func seedLiquidityPools(store *fakeAccountStore) {
@@ -159,7 +188,9 @@ func TestCreateAccount(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		store := newFakeAccountStore()
 		tbClient := &fakeTBClient{
-			createAccountsRes: []tb.CreateAccountResult{{Status: tb.AccountCreated}},
+			createAccountsRes: []tb.CreateAccountResult{
+				{Status: tb.AccountCreated},
+			},
 		}
 		svc := MoneyModuleService{Tb: tbClient, Queries: store}
 
@@ -170,21 +201,26 @@ func TestCreateAccount(t *testing.T) {
 		if len(store.createdParams) != 1 {
 			t.Fatalf("expected 1 postgres insert, got %d", len(store.createdParams))
 		}
-		if store.createdParams[0].AccountName != "Main Wallet" {
-			t.Errorf("expected AccountName 'Main Wallet', got %q", store.createdParams[0].AccountName)
+		if got := store.createdParams[0].AccountName; got != "Main Wallet" {
+			t.Errorf("expected AccountName 'Main Wallet', got %q", got)
 		}
 		if len(tbClient.createdAccounts) != 1 {
-			t.Fatalf("expected 1 tigerbeetle account created, got %d", len(tbClient.createdAccounts))
+			t.Fatalf("expected 1 tb account, got %d", len(tbClient.createdAccounts))
 		}
-		if tbClient.createdAccounts[0].ID != tb.BytesToUint128(id) {
+		acc := tbClient.createdAccounts[0]
+		if acc.ID != tb.BytesToUint128(id) {
 			t.Errorf("unexpected tigerbeetle account ID")
 		}
-		if tbClient.createdAccounts[0].Ledger != constants.RealAccountLedger {
-			t.Errorf("expected ledger %d, got %d", constants.RealAccountLedger, tbClient.createdAccounts[0].Ledger)
+		if acc.Ledger != constants.RealAccountLedger {
+			t.Errorf(
+				"expected ledger %d, got %d",
+				constants.RealAccountLedger,
+				acc.Ledger,
+			)
 		}
 		wantFlags := tb.AccountFlags{DebitsMustNotExceedCredits: true}.ToUint16()
-		if tbClient.createdAccounts[0].Flags != wantFlags {
-			t.Errorf("expected DebitsMustNotExceedCredits flag (%d), got %d", wantFlags, tbClient.createdAccounts[0].Flags)
+		if acc.Flags != wantFlags {
+			t.Errorf("expected flags %d, got %d", wantFlags, acc.Flags)
 		}
 	})
 
@@ -194,7 +230,8 @@ func TestCreateAccount(t *testing.T) {
 		tbClient := &fakeTBClient{}
 		svc := MoneyModuleService{Tb: tbClient, Queries: store}
 
-		if err := svc.CreateAccount(ctx, id, "Main", "USER", constants.ACCOUNT); err == nil {
+		err := svc.CreateAccount(ctx, id, "Main", "USER", constants.ACCOUNT)
+		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
 		if len(tbClient.createdAccounts) != 0 {
@@ -207,7 +244,8 @@ func TestCreateAccount(t *testing.T) {
 		tbClient := &fakeTBClient{createAccountsErr: errors.New("tb down")}
 		svc := MoneyModuleService{Tb: tbClient, Queries: store}
 
-		if err := svc.CreateAccount(ctx, id, "Main", "USER", constants.ACCOUNT); err == nil {
+		err := svc.CreateAccount(ctx, id, "Main", "USER", constants.ACCOUNT)
+		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
 	})
@@ -222,7 +260,8 @@ func TestReadAccount(t *testing.T) {
 		store.accounts[id] = makeAccount(id, db.AccountTypeREAL, false)
 		svc := MoneyModuleService{Queries: store}
 
-		ownerType, ownerID, _, name, isArchived, err := svc.ReadAccount(ctx, id, constants.ACCOUNT)
+		ownerType, ownerID, _, name, isArchived, err :=
+			svc.ReadAccount(ctx, id, constants.ACCOUNT)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -235,8 +274,8 @@ func TestReadAccount(t *testing.T) {
 		if isArchived {
 			t.Errorf("expected isArchived=false")
 		}
-		if len(ownerID.Value) != 16 {
-			t.Errorf("expected 16-byte ownerID, got %d", len(ownerID.Value))
+		if len(ownerID.GetValue()) != 16 {
+			t.Errorf("expected 16-byte ownerID, got %d", len(ownerID.GetValue()))
 		}
 	})
 
@@ -247,7 +286,8 @@ func TestReadAccount(t *testing.T) {
 		store.accounts[id] = acc
 		svc := MoneyModuleService{Queries: store}
 
-		ownerType, _, _, _, isArchived, err := svc.ReadAccount(ctx, id, constants.ACCOUNT)
+		ownerType, _, _, _, isArchived, err :=
+			svc.ReadAccount(ctx, id, constants.ACCOUNT)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -321,7 +361,7 @@ func TestAccountToAccount_Success(t *testing.T) {
 	store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
 
 	tbClient := &fakeTBClient{
-		createTransfersRes: []tb.CreateTransferResult{{Status: tb.TransferCreated}},
+		createTransfersRes: tbResults(tb.TransferCreated),
 	}
 	svc := MoneyModuleService{Tb: tbClient, Queries: store}
 
@@ -339,13 +379,15 @@ func TestAccountToAccount_Success(t *testing.T) {
 	if txID == ([16]byte{}) || txID != tr.ID.Bytes() || txID != tr.UserData128.Bytes() {
 		t.Errorf("expected txID to match transfer ID and UserData128")
 	}
-	if tr.DebitAccountID != tb.BytesToUint128(payer) || tr.CreditAccountID != tb.BytesToUint128(payee) {
+	if tr.DebitAccountID != tb.BytesToUint128(payer) ||
+		tr.CreditAccountID != tb.BytesToUint128(payee) {
 		t.Errorf("unexpected debit/credit account IDs")
 	}
 	if tr.Amount != tb.ToUint128(500) {
 		t.Errorf("expected amount 500, got %v", tr.Amount)
 	}
-	if tr.Ledger != constants.RealAccountLedger || tr.Code != constants.RealAccountCode {
+	if tr.Ledger != constants.RealAccountLedger ||
+		tr.Code != constants.RealAccountCode {
 		t.Errorf("expected RealAccountLedger/Code, got %d/%d", tr.Ledger, tr.Code)
 	}
 	if tr.Flags != 0 {
@@ -353,18 +395,43 @@ func TestAccountToAccount_Success(t *testing.T) {
 	}
 }
 
-func TestAccountToAccount_Errors(t *testing.T) {
-	ctx := context.Background()
-	payer, payee := testUUID(1), testUUID(2)
+type accountToAccountErrorCase struct {
+	name       string
+	payer      [16]byte
+	payee      [16]byte
+	amount     uint64
+	setup      func(store *fakeAccountStore, tbClient *fakeTBClient)
+	wantStatus constants.TransactionStatus
+}
 
-	tests := []struct {
-		name       string
-		payer      [16]byte
-		payee      [16]byte
-		amount     uint64
-		setup      func(store *fakeAccountStore, tbClient *fakeTBClient)
-		wantStatus constants.TransactionStatus
-	}{
+func runAccountToAccountErrorCases(t *testing.T, tests []accountToAccountErrorCase) {
+	t.Helper()
+	ctx := context.Background()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newFakeAccountStore()
+			tbClient := &fakeTBClient{}
+			tc.setup(store, tbClient)
+			svc := MoneyModuleService{Tb: tbClient, Queries: store}
+
+			txID, status, err :=
+				svc.AccountToAccount(ctx, tc.payer, tc.payee, tc.amount)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if txID != ([16]byte{}) {
+				t.Fatalf("expected zero txID on error, got %x", txID)
+			}
+			if status != tc.wantStatus {
+				t.Fatalf("expected status %s, got %s", tc.wantStatus, status)
+			}
+		})
+	}
+}
+
+func TestAccountToAccount_ValidationErrors(t *testing.T) {
+	payer, payee := testUUID(1), testUUID(2)
+	runAccountToAccountErrorCases(t, []accountToAccountErrorCase{
 		{
 			name:       "zero amount",
 			payer:      payer,
@@ -423,6 +490,12 @@ func TestAccountToAccount_Errors(t *testing.T) {
 			},
 			wantStatus: constants.TransactionInvalidAccountType,
 		},
+	})
+}
+
+func TestAccountToAccount_PayeeErrors(t *testing.T) {
+	payer, payee := testUUID(1), testUUID(2)
+	runAccountToAccountErrorCases(t, []accountToAccountErrorCase{
 		{
 			name:   "payee not found",
 			payer:  payer,
@@ -466,14 +539,23 @@ func TestAccountToAccount_Errors(t *testing.T) {
 			},
 			wantStatus: constants.TransactionInvalidAccountType,
 		},
+	})
+}
+
+func TestAccountToAccount_TigerBeetleErrors(t *testing.T) {
+	payer, payee := testUUID(1), testUUID(2)
+	seedBoth := func(store *fakeAccountStore) {
+		store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
+		store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
+	}
+	runAccountToAccountErrorCases(t, []accountToAccountErrorCase{
 		{
 			name:   "tigerbeetle transport error",
 			payer:  payer,
 			payee:  payee,
 			amount: 100,
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
-				store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
+				seedBoth(store)
 				tbClient.createTransfersErr = errors.New("tb timeout")
 			},
 			wantStatus: constants.TransactionInternalError,
@@ -484,9 +566,8 @@ func TestAccountToAccount_Errors(t *testing.T) {
 			payee:  payee,
 			amount: 100,
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
-				store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{{Status: tb.TransferExceedsCredits}}
+				seedBoth(store)
+				tbClient.createTransfersRes = tbResults(tb.TransferExceedsCredits)
 			},
 			wantStatus: constants.TransactionInsufficientFunds,
 		},
@@ -496,9 +577,8 @@ func TestAccountToAccount_Errors(t *testing.T) {
 			payee:  payee,
 			amount: 100,
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
-				store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{{Status: tb.TransferExceedsDebits}}
+				seedBoth(store)
+				tbClient.createTransfersRes = tbResults(tb.TransferExceedsDebits)
 			},
 			wantStatus: constants.TransactionInsufficientFunds,
 		},
@@ -508,38 +588,21 @@ func TestAccountToAccount_Errors(t *testing.T) {
 			payee:  payee,
 			amount: 100,
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
-				store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{{Status: tb.TransferOverflowsDebits}}
+				seedBoth(store)
+				tbClient.createTransfersRes = tbResults(tb.TransferOverflowsDebits)
 			},
 			wantStatus: constants.TransactionTransferFailed,
 		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			store := newFakeAccountStore()
-			tbClient := &fakeTBClient{}
-			tc.setup(store, tbClient)
-			svc := MoneyModuleService{Tb: tbClient, Queries: store}
-
-			txID, status, err := svc.AccountToAccount(ctx, tc.payer, tc.payee, tc.amount)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if txID != ([16]byte{}) {
-				t.Fatalf("expected zero txID on error, got %x", txID)
-			}
-			if status != tc.wantStatus {
-				t.Fatalf("expected status %s, got %s", tc.wantStatus, status)
-			}
-		})
-	}
+	})
 }
 
 func TestAccountToAccount_Panics(t *testing.T) {
 	ctx := context.Background()
 	payer, payee := testUUID(1), testUUID(2)
+	seedBoth := func(store *fakeAccountStore) {
+		store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
+		store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
+	}
 
 	tests := []struct {
 		name  string
@@ -566,41 +629,40 @@ func TestAccountToAccount_Panics(t *testing.T) {
 		{
 			name: "unexpected result count",
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
-				store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{}
+				seedBoth(store)
+				tbClient.createTransfersRes = tbResults()
 			},
 		},
 		{
 			name: "desync debit account not found",
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
-				store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{{Status: tb.TransferDebitAccountNotFound}}
+				seedBoth(store)
+				tbClient.createTransfersRes = tbResults(tb.TransferDebitAccountNotFound)
 			},
 		},
 		{
 			name: "desync credit account closed",
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
-				store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{{Status: tb.TransferCreditAccountAlreadyClosed}}
+				seedBoth(store)
+				tbClient.createTransfersRes = tbResults(
+					tb.TransferCreditAccountAlreadyClosed,
+				)
 			},
 		},
 		{
 			name: "desync ledger mismatch",
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
-				store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{{Status: tb.TransferAccountsMustHaveTheSameLedger}}
+				seedBoth(store)
+				tbClient.createTransfersRes = tbResults(
+					tb.TransferAccountsMustHaveTheSameLedger,
+				)
 			},
 		},
 		{
 			name: "invariant duplicate transfer ID",
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				store.accounts[payer] = makeAccount(payer, db.AccountTypeREAL, false)
-				store.accounts[payee] = makeAccount(payee, db.AccountTypeREAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{{Status: tb.TransferExists}}
+				seedBoth(store)
+				tbClient.createTransfersRes = tbResults(tb.TransferExists)
 			},
 		},
 	}
@@ -631,7 +693,7 @@ func TestBudgetToBudget(t *testing.T) {
 		store.accounts[payee] = makeAccount(payee, db.AccountTypeVIRTUAL, false)
 
 		tbClient := &fakeTBClient{
-			createTransfersRes: []tb.CreateTransferResult{{Status: tb.TransferCreated}},
+			createTransfersRes: tbResults(tb.TransferCreated),
 		}
 		svc := MoneyModuleService{Tb: tbClient, Queries: store}
 
@@ -646,8 +708,9 @@ func TestBudgetToBudget(t *testing.T) {
 		if txID == ([16]byte{}) || txID != tr.ID.Bytes() {
 			t.Errorf("expected txID to match transfer ID")
 		}
-		if tr.Ledger != constants.VirtualAccountLedger || tr.Code != constants.VirtualAccountCode {
-			t.Errorf("expected VirtualAccountLedger/Code, got %d/%d", tr.Ledger, tr.Code)
+		if tr.Ledger != constants.VirtualAccountLedger ||
+			tr.Code != constants.VirtualAccountCode {
+			t.Errorf("expected virtual ledger/code, got %d/%d", tr.Ledger, tr.Code)
 		}
 	})
 
@@ -659,7 +722,7 @@ func TestBudgetToBudget(t *testing.T) {
 
 		_, status, err := svc.BudgetToBudget(ctx, payer, payee, 250)
 		if err == nil || status != constants.TransactionInvalidAccountType {
-			t.Fatalf("expected TransactionInvalidAccountType, got (%s, %v)", status, err)
+			t.Fatalf("expected invalid account type, got (%s, %v)", status, err)
 		}
 	})
 
@@ -671,7 +734,7 @@ func TestBudgetToBudget(t *testing.T) {
 
 		_, status, err := svc.BudgetToBudget(ctx, payer, payee, 250)
 		if err == nil || status != constants.TransactionInvalidAccountType {
-			t.Fatalf("expected TransactionInvalidAccountType, got (%s, %v)", status, err)
+			t.Fatalf("expected invalid account type, got (%s, %v)", status, err)
 		}
 	})
 }
@@ -688,10 +751,7 @@ func TestAccountToBudget_Success(t *testing.T) {
 	store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
 
 	tbClient := &fakeTBClient{
-		createTransfersRes: []tb.CreateTransferResult{
-			{Status: tb.TransferCreated},
-			{Status: tb.TransferCreated},
-		},
+		createTransfersRes: tbResults(tb.TransferCreated, tb.TransferCreated),
 	}
 	svc := MoneyModuleService{Tb: tbClient, Queries: store}
 
@@ -707,36 +767,65 @@ func TestAccountToBudget_Success(t *testing.T) {
 	}
 
 	leg1, leg2 := tbClient.createdTransfers[0], tbClient.createdTransfers[1]
-	if txID == ([16]byte{}) || leg1.UserData128.Bytes() != txID || leg2.UserData128.Bytes() != txID {
+	if txID == ([16]byte{}) ||
+		leg1.UserData128.Bytes() != txID ||
+		leg2.UserData128.Bytes() != txID {
 		t.Errorf("expected both linked legs to share txID in UserData128")
 	}
-	if leg1.DebitAccountID != tb.BytesToUint128(accID) || leg1.CreditAccountID != constants.GetRealLedgerLiquidityBookId() {
+	if leg1.DebitAccountID != tb.BytesToUint128(accID) ||
+		leg1.CreditAccountID != constants.GetRealLedgerLiquidityBookId() {
 		t.Errorf("leg 1 debit/credit mismatch")
 	}
 	expectedLinkedFlag := tb.TransferFlags{Linked: true}.ToUint16()
 	if leg1.Ledger != constants.RealAccountLedger || leg1.Flags != expectedLinkedFlag {
-		t.Errorf("leg 1 ledger/flags mismatch: ledger=%d flags=%d", leg1.Ledger, leg1.Flags)
+		t.Errorf("leg 1 mismatch: ledger=%d flags=%d", leg1.Ledger, leg1.Flags)
 	}
-	if leg2.DebitAccountID != constants.GetVirtualLedgerLiquidityBookId() || leg2.CreditAccountID != tb.BytesToUint128(budgetID) {
+	if leg2.DebitAccountID != constants.GetVirtualLedgerLiquidityBookId() ||
+		leg2.CreditAccountID != tb.BytesToUint128(budgetID) {
 		t.Errorf("leg 2 debit/credit mismatch")
 	}
 	if leg2.Ledger != constants.VirtualAccountLedger || leg2.Flags != 0 {
-		t.Errorf("leg 2 ledger/flags mismatch: ledger=%d flags=%d", leg2.Ledger, leg2.Flags)
+		t.Errorf("leg 2 mismatch: ledger=%d flags=%d", leg2.Ledger, leg2.Flags)
 	}
 }
 
-func TestAccountToBudget_Errors(t *testing.T) {
-	ctx := context.Background()
-	accID, budgetID := testUUID(20), testUUID(21)
+type accountToBudgetErrorCase struct {
+	name       string
+	accID      [16]byte
+	budgetID   [16]byte
+	amount     uint64
+	setup      func(store *fakeAccountStore, tbClient *fakeTBClient)
+	wantStatus constants.TransactionStatus
+}
 
-	tests := []struct {
-		name       string
-		accID      [16]byte
-		budgetID   [16]byte
-		amount     uint64
-		setup      func(store *fakeAccountStore, tbClient *fakeTBClient)
-		wantStatus constants.TransactionStatus
-	}{
+func runAccountToBudgetErrorCases(t *testing.T, tests []accountToBudgetErrorCase) {
+	t.Helper()
+	ctx := context.Background()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newFakeAccountStore()
+			tbClient := &fakeTBClient{}
+			tc.setup(store, tbClient)
+			svc := MoneyModuleService{Tb: tbClient, Queries: store}
+
+			txID, status, err :=
+				svc.AccountToBudget(ctx, tc.accID, tc.budgetID, tc.amount)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if txID != ([16]byte{}) {
+				t.Fatalf("expected zero txID on error, got %x", txID)
+			}
+			if status != tc.wantStatus {
+				t.Fatalf("expected status %s, got %s", tc.wantStatus, status)
+			}
+		})
+	}
+}
+
+func TestAccountToBudget_ValidationErrors(t *testing.T) {
+	accID, budgetID := testUUID(20), testUUID(21)
+	runAccountToBudgetErrorCases(t, []accountToBudgetErrorCase{
 		{
 			name:       "zero amount",
 			accID:      accID,
@@ -761,7 +850,8 @@ func TestAccountToBudget_Errors(t *testing.T) {
 			setup: func(store *fakeAccountStore, _ *fakeTBClient) {
 				seedLiquidityPools(store)
 				store.accounts[accID] = makeAccount(accID, db.AccountTypeVIRTUAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
+				store.accounts[budgetID] =
+					makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
 			},
 			wantStatus: constants.TransactionInvalidAccountType,
 		},
@@ -784,7 +874,8 @@ func TestAccountToBudget_Errors(t *testing.T) {
 			setup: func(store *fakeAccountStore, _ *fakeTBClient) {
 				seedLiquidityPools(store)
 				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, true)
+				store.accounts[budgetID] =
+					makeAccount(budgetID, db.AccountTypeVIRTUAL, true)
 			},
 			wantStatus: constants.TransactionPayeeArchived,
 		},
@@ -796,23 +887,33 @@ func TestAccountToBudget_Errors(t *testing.T) {
 			setup: func(store *fakeAccountStore, _ *fakeTBClient) {
 				seedLiquidityPools(store)
 				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeREAL, false)
+				store.accounts[budgetID] =
+					makeAccount(budgetID, db.AccountTypeREAL, false)
 			},
 			wantStatus: constants.TransactionInvalidAccountType,
 		},
+	})
+}
+
+func TestAccountToBudget_TigerBeetleErrors(t *testing.T) {
+	accID, budgetID := testUUID(20), testUUID(21)
+	seedValid := func(store *fakeAccountStore) {
+		seedLiquidityPools(store)
+		store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
+		store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
+	}
+	runAccountToBudgetErrorCases(t, []accountToBudgetErrorCase{
 		{
 			name:     "leg 0 insufficient funds fails linked chain",
 			accID:    accID,
 			budgetID: budgetID,
 			amount:   100,
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				seedLiquidityPools(store)
-				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{
-					{Status: tb.TransferExceedsCredits},
-					{Status: tb.TransferLinkedEventFailed},
-				}
+				seedValid(store)
+				tbClient.createTransfersRes = tbResults(
+					tb.TransferExceedsCredits,
+					tb.TransferLinkedEventFailed,
+				)
 			},
 			wantStatus: constants.TransactionInsufficientFunds,
 		},
@@ -822,13 +923,11 @@ func TestAccountToBudget_Errors(t *testing.T) {
 			budgetID: budgetID,
 			amount:   100,
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				seedLiquidityPools(store)
-				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{
-					{Status: tb.TransferLinkedEventFailed},
-					{Status: tb.TransferExceedsDebits},
-				}
+				seedValid(store)
+				tbClient.createTransfersRes = tbResults(
+					tb.TransferLinkedEventFailed,
+					tb.TransferExceedsDebits,
+				)
 			},
 			wantStatus: constants.TransactionInsufficientFunds,
 		},
@@ -838,39 +937,22 @@ func TestAccountToBudget_Errors(t *testing.T) {
 			budgetID: budgetID,
 			amount:   100,
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				seedLiquidityPools(store)
-				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
+				seedValid(store)
 				tbClient.createTransfersErr = errors.New("network error")
 			},
 			wantStatus: constants.TransactionInternalError,
 		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			store := newFakeAccountStore()
-			tbClient := &fakeTBClient{}
-			tc.setup(store, tbClient)
-			svc := MoneyModuleService{Tb: tbClient, Queries: store}
-
-			txID, status, err := svc.AccountToBudget(ctx, tc.accID, tc.budgetID, tc.amount)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if txID != ([16]byte{}) {
-				t.Fatalf("expected zero txID on error, got %x", txID)
-			}
-			if status != tc.wantStatus {
-				t.Fatalf("expected status %s, got %s", tc.wantStatus, status)
-			}
-		})
-	}
+	})
 }
 
 func TestAccountToBudget_Panics(t *testing.T) {
 	ctx := context.Background()
 	accID, budgetID := testUUID(20), testUUID(21)
+	seedValid := func(store *fakeAccountStore) {
+		seedLiquidityPools(store)
+		store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
+		store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
+	}
 
 	tests := []struct {
 		name  string
@@ -880,7 +962,8 @@ func TestAccountToBudget_Panics(t *testing.T) {
 			name: "missing real liquidity pool in postgres",
 			setup: func(store *fakeAccountStore, _ *fakeTBClient) {
 				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
+				store.accounts[budgetID] =
+					makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
 			},
 		},
 		{
@@ -889,52 +972,45 @@ func TestAccountToBudget_Panics(t *testing.T) {
 				realLP := constants.GetRealLedgerLiquidityBookId().Bytes()
 				store.accounts[realLP] = makeAccount(realLP, db.AccountTypeREAL, false)
 				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
+				store.accounts[budgetID] =
+					makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
 			},
 		},
 		{
 			name: "wrong result count",
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				seedLiquidityPools(store)
-				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{{Status: tb.TransferCreated}}
+				seedValid(store)
+				tbClient.createTransfersRes = tbResults(tb.TransferCreated)
 			},
 		},
 		{
 			name: "linked failure with no root cause",
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				seedLiquidityPools(store)
-				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{
-					{Status: tb.TransferLinkedEventFailed},
-					{Status: tb.TransferLinkedEventFailed},
-				}
+				seedValid(store)
+				tbClient.createTransfersRes = tbResults(
+					tb.TransferLinkedEventFailed,
+					tb.TransferLinkedEventFailed,
+				)
 			},
 		},
 		{
 			name: "desync on leg 2",
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				seedLiquidityPools(store)
-				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{
-					{Status: tb.TransferLinkedEventFailed},
-					{Status: tb.TransferCreditAccountNotFound},
-				}
+				seedValid(store)
+				tbClient.createTransfersRes = tbResults(
+					tb.TransferLinkedEventFailed,
+					tb.TransferCreditAccountNotFound,
+				)
 			},
 		},
 		{
 			name: "linked event chain open",
 			setup: func(store *fakeAccountStore, tbClient *fakeTBClient) {
-				seedLiquidityPools(store)
-				store.accounts[accID] = makeAccount(accID, db.AccountTypeREAL, false)
-				store.accounts[budgetID] = makeAccount(budgetID, db.AccountTypeVIRTUAL, false)
-				tbClient.createTransfersRes = []tb.CreateTransferResult{
-					{Status: tb.TransferLinkedEventFailed},
-					{Status: tb.TransferLinkedEventChainOpen},
-				}
+				seedValid(store)
+				tbClient.createTransfersRes = tbResults(
+					tb.TransferLinkedEventFailed,
+					tb.TransferLinkedEventChainOpen,
+				)
 			},
 		},
 	}
@@ -980,8 +1056,9 @@ func TestGetAllTransfers(t *testing.T) {
 			t.Errorf("unexpected AccountFilter.AccountID")
 		}
 		flags := tbClient.lastAccountFilter.AccountFilterFlags()
-		if !flags.Debits || !flags.Credits || tbClient.lastAccountFilter.Limit == 0 {
-			t.Errorf("expected Debits=true, Credits=true, Limit>0; got %+v limit=%d", flags, tbClient.lastAccountFilter.Limit)
+		limit := tbClient.lastAccountFilter.Limit
+		if !flags.Debits || !flags.Credits || limit == 0 {
+			t.Errorf("unexpected filter flags=%+v limit=%d", flags, limit)
 		}
 	})
 
@@ -993,7 +1070,7 @@ func TestGetAllTransfers(t *testing.T) {
 
 		got, status, err := svc.GetAllBudgetTransfers(ctx, budgetID)
 		if err != nil || status != constants.TransactionSuccess || len(got) != 1 {
-			t.Fatalf("unexpected result: got=%d status=%s err=%v", len(got), status, err)
+			t.Fatalf("unexpected: got=%d status=%s err=%v", len(got), status, err)
 		}
 	})
 
@@ -1021,7 +1098,7 @@ func TestGetAllTransfers(t *testing.T) {
 		svc := MoneyModuleService{Tb: &fakeTBClient{}, Queries: store}
 		_, status, err := svc.GetAllBudgetTransfers(ctx, accID)
 		if err == nil || status != constants.TransactionInvalidAccountType {
-			t.Fatalf("expected TransactionInvalidAccountType, got (%s, %v)", status, err)
+			t.Fatalf("expected invalid account type, got (%s, %v)", status, err)
 		}
 	})
 

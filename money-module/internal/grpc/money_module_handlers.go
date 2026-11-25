@@ -31,7 +31,9 @@ func (h *MoneyModuleHandler) CreateAccount(
 	}
 	uuid := [16]byte(req.GetOwnerId().Value)
 	// forward to service layer
-	err := h.Svc.CreateAccount(ctx, uuid, req.BudgetName, req.OwnerType.String(), constants.ACCOUNT)
+	err := h.Svc.CreateAccount(
+		ctx, uuid, req.BudgetName, req.OwnerType.String(), constants.ACCOUNT,
+	)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
@@ -56,7 +58,8 @@ func (h *MoneyModuleHandler) ReadAccount(
 	uuid := [16]byte(req.GetId().Value)
 	// forward to service layer
 
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.ACCOUNT)
+	ownerType, ownerId, walletType, walletName, isArchived, err :=
+		h.Svc.ReadAccount(ctx, uuid, constants.ACCOUNT)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -69,7 +72,7 @@ func (h *MoneyModuleHandler) ReadAccount(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    &ownerId,
+		OwnerId:    ownerId,
 	}
 	return out, nil
 }
@@ -85,12 +88,20 @@ func (h *MoneyModuleHandler) UpdateAccount(
 	uuid := [16]byte(req.GetId().Value)
 	owner_uuid := [16]byte(req.GetOwnerId().Value)
 
-	err := h.Svc.UpdateAccount(ctx, uuid, req.OwnerType.String(), owner_uuid, req.WalletName, constants.ACCOUNT)
+	err := h.Svc.UpdateAccount(
+		ctx,
+		uuid,
+		req.OwnerType.String(),
+		owner_uuid,
+		req.WalletName,
+		constants.ACCOUNT,
+	)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.ACCOUNT)
+	ownerType, ownerId, walletType, walletName, isArchived, err :=
+		h.Svc.ReadAccount(ctx, uuid, constants.ACCOUNT)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -103,7 +114,7 @@ func (h *MoneyModuleHandler) UpdateAccount(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    &ownerId,
+		OwnerId:    ownerId,
 	}
 	return out, nil
 }
@@ -122,7 +133,8 @@ func (h *MoneyModuleHandler) ArchiveAccount(
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.ACCOUNT)
+	ownerType, ownerId, walletType, walletName, isArchived, err :=
+		h.Svc.ReadAccount(ctx, uuid, constants.ACCOUNT)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -135,7 +147,7 @@ func (h *MoneyModuleHandler) ArchiveAccount(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    &ownerId,
+		OwnerId:    ownerId,
 	}
 	return out, nil
 }
@@ -149,7 +161,9 @@ func (h *MoneyModuleHandler) CreateBudget(
 	}
 	uuid := [16]byte(req.GetOwnerId().Value)
 	// forward to service layer
-	err := h.Svc.CreateAccount(ctx, uuid, req.BudgetName, req.OwnerType.String(), constants.BUDGET)
+	err := h.Svc.CreateAccount(
+		ctx, uuid, req.BudgetName, req.OwnerType.String(), constants.BUDGET,
+	)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
@@ -175,7 +189,8 @@ func (h *MoneyModuleHandler) ReadBudget(
 	uuid := [16]byte(req.GetId().Value)
 	// forward to service layer
 
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.BUDGET)
+	ownerType, ownerId, walletType, walletName, isArchived, err :=
+		h.Svc.ReadAccount(ctx, uuid, constants.BUDGET)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -188,7 +203,7 @@ func (h *MoneyModuleHandler) ReadBudget(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    &ownerId,
+		OwnerId:    ownerId,
 	}
 	return out, nil
 }
@@ -203,12 +218,15 @@ func (h *MoneyModuleHandler) UpdateBudget(
 	uuid := [16]byte(req.GetId().Value)
 	owner_uuid := [16]byte(req.GetOwnerId().Value)
 
-	err := h.Svc.UpdateAccount(ctx, uuid, req.OwnerType.String(), owner_uuid, req.WalletName, constants.BUDGET)
+	err := h.Svc.UpdateAccount(
+		ctx, uuid, req.OwnerType.String(), owner_uuid, req.WalletName, constants.BUDGET,
+	)
 	if err != nil {
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.BUDGET)
+	ownerType, ownerId, walletType, walletName, isArchived, err :=
+		h.Svc.ReadAccount(ctx, uuid, constants.BUDGET)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -221,7 +239,7 @@ func (h *MoneyModuleHandler) UpdateBudget(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    &ownerId,
+		OwnerId:    ownerId,
 	}
 	return out, nil
 }
@@ -240,7 +258,8 @@ func (h *MoneyModuleHandler) ArchiveBudget(
 		//TODO: Determine what the error code should be
 		return nil, status.Error(codes.Internal, "User already exists")
 	}
-	ownerType, ownerId, walletType, walletName, isArchived, err := h.Svc.ReadAccount(ctx, uuid, constants.BUDGET)
+	ownerType, ownerId, walletType, walletName, isArchived, err :=
+		h.Svc.ReadAccount(ctx, uuid, constants.BUDGET)
 
 	if err != nil {
 		//TODO: Determine what the error code should be
@@ -253,14 +272,16 @@ func (h *MoneyModuleHandler) ArchiveBudget(
 		WalletName: walletName,
 		Id:         req.Id,
 		IsArchived: isArchived,
-		OwnerId:    &ownerId,
+		OwnerId:    ownerId,
 	}
 	return out, nil
 }
 
 func parseUUID(u *pb.UUID, field string) ([16]byte, error) {
 	if u == nil || len(u.GetValue()) != 16 {
-		return [16]byte{}, status.Errorf(codes.InvalidArgument, "%s must be a 16-byte UUID", field)
+		return [16]byte{}, status.Errorf(
+			codes.InvalidArgument, "%s must be a 16-byte UUID", field,
+		)
 	}
 	return [16]byte(u.GetValue()), nil
 }
@@ -276,11 +297,18 @@ func toProtoStatus(txStatus constants.TransactionStatus) pb.Status {
 
 func toGRPCError(txStatus constants.TransactionStatus, err error) error {
 	switch txStatus {
-	case constants.TransactionInvalidAmount, constants.TransactionSameAccount, constants.TransactionInvalidAccountType:
+	case constants.TransactionInvalidAmount,
+		constants.TransactionSameAccount,
+		constants.TransactionInvalidAccountType:
 		return status.Error(codes.InvalidArgument, err.Error())
-	case constants.TransactionAccountNotFound, constants.TransactionPayerNotFound, constants.TransactionPayeeNotFound:
+	case constants.TransactionAccountNotFound,
+		constants.TransactionPayerNotFound,
+		constants.TransactionPayeeNotFound:
 		return status.Error(codes.NotFound, err.Error())
-	case constants.TransactionAccountArchived, constants.TransactionPayerArchived, constants.TransactionPayeeArchived, constants.TransactionInsufficientFunds:
+	case constants.TransactionAccountArchived,
+		constants.TransactionPayerArchived,
+		constants.TransactionPayeeArchived,
+		constants.TransactionInsufficientFunds:
 		return status.Error(codes.FailedPrecondition, err.Error())
 	default:
 		return status.Error(codes.Internal, err.Error())
@@ -301,13 +329,16 @@ func (h *MoneyModuleHandler) PayAccountFromBudget(
 		return nil, err
 	}
 
-	transactionID, txStatus, err := h.Svc.BudgetToAccount(ctx, accountUUID, budgetUUID, req.GetAmount())
+	txID, txStatus, err := h.Svc.BudgetToAccount(
+		ctx, accountUUID, budgetUUID, req.GetAmount(),
+	)
 	if err != nil {
-		return &pb.PaymentResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
+		resp := &pb.PaymentResponse{Status: toProtoStatus(txStatus)}
+		return resp, toGRPCError(txStatus, err)
 	}
 
 	return &pb.PaymentResponse{
-		TransactionId: &pb.UUID{Value: transactionID[:]},
+		TransactionId: &pb.UUID{Value: txID[:]},
 		Status:        toProtoStatus(txStatus),
 	}, nil
 }
@@ -325,13 +356,16 @@ func (h *MoneyModuleHandler) PayBudgetFromAccount(
 		return nil, err
 	}
 
-	transactionID, txStatus, err := h.Svc.AccountToBudget(ctx, accountUUID, budgetUUID, req.GetAmount())
+	txID, txStatus, err := h.Svc.AccountToBudget(
+		ctx, accountUUID, budgetUUID, req.GetAmount(),
+	)
 	if err != nil {
-		return &pb.PaymentResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
+		resp := &pb.PaymentResponse{Status: toProtoStatus(txStatus)}
+		return resp, toGRPCError(txStatus, err)
 	}
 
 	return &pb.PaymentResponse{
-		TransactionId: &pb.UUID{Value: transactionID[:]},
+		TransactionId: &pb.UUID{Value: txID[:]},
 		Status:        toProtoStatus(txStatus),
 	}, nil
 }
@@ -345,13 +379,16 @@ func (h *MoneyModuleHandler) PayRootFromAccount(
 		return nil, err
 	}
 
-	transactionID, txStatus, err := h.Svc.AccountToRootAccount(ctx, accountUUID, req.GetAmount())
+	txID, txStatus, err := h.Svc.AccountToRootAccount(
+		ctx, accountUUID, req.GetAmount(),
+	)
 	if err != nil {
-		return &pb.PaymentResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
+		resp := &pb.PaymentResponse{Status: toProtoStatus(txStatus)}
+		return resp, toGRPCError(txStatus, err)
 	}
 
 	return &pb.PaymentResponse{
-		TransactionId: &pb.UUID{Value: transactionID[:]},
+		TransactionId: &pb.UUID{Value: txID[:]},
 		Status:        toProtoStatus(txStatus),
 	}, nil
 }
@@ -365,13 +402,16 @@ func (h *MoneyModuleHandler) PayAccountFromRoot(
 		return nil, err
 	}
 
-	transactionID, txStatus, err := h.Svc.RootAccountToAccount(ctx, accountUUID, req.GetAmount())
+	txID, txStatus, err := h.Svc.RootAccountToAccount(
+		ctx, accountUUID, req.GetAmount(),
+	)
 	if err != nil {
-		return &pb.PaymentResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
+		resp := &pb.PaymentResponse{Status: toProtoStatus(txStatus)}
+		return resp, toGRPCError(txStatus, err)
 	}
 
 	return &pb.PaymentResponse{
-		TransactionId: &pb.UUID{Value: transactionID[:]},
+		TransactionId: &pb.UUID{Value: txID[:]},
 		Status:        toProtoStatus(txStatus),
 	}, nil
 }
@@ -389,13 +429,16 @@ func (h *MoneyModuleHandler) SendBetweenBudgets(
 		return nil, err
 	}
 
-	transactionID, txStatus, err := h.Svc.BudgetToBudget(ctx, payerUUID, payeeUUID, req.GetAmount())
+	txID, txStatus, err := h.Svc.BudgetToBudget(
+		ctx, payerUUID, payeeUUID, req.GetAmount(),
+	)
 	if err != nil {
-		return &pb.SendResponse{Status: toProtoStatus(txStatus)}, toGRPCError(txStatus, err)
+		resp := &pb.SendResponse{Status: toProtoStatus(txStatus)}
+		return resp, toGRPCError(txStatus, err)
 	}
 
 	return &pb.SendResponse{
-		TransactionId: &pb.UUID{Value: transactionID[:]},
+		TransactionId: &pb.UUID{Value: txID[:]},
 		Status:        toProtoStatus(txStatus),
 	}, nil
 }

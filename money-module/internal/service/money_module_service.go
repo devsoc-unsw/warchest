@@ -39,24 +39,75 @@ func (MMS MoneyModuleService) queries() AccountStore {
 // Public methods for CRUA on specific accounts
 type AccountService interface {
 	CreateAccount(ctx context.Context, uuid [16]byte) error
-	ReadAccount(ctx context.Context, uuid [16]byte, accountType constants.AccountType) (pb.OwnerType, pb.UUID, pb.WalletType, string, bool, error)
-	UpdateAccount(ctx context.Context, uuid [16]byte, ownerType string, owerId [16]byte, walletName string, accountType constants.AccountType) error
+	ReadAccount(
+		ctx context.Context,
+		uuid [16]byte,
+		accountType constants.AccountType,
+	) (pb.OwnerType, *pb.UUID, pb.WalletType, string, bool, error)
+	UpdateAccount(
+		ctx context.Context,
+		uuid [16]byte,
+		ownerType string,
+		owerId [16]byte,
+		walletName string,
+		accountType constants.AccountType,
+	) error
 	ArchiveAccount(ctx context.Context, uuid [16]byte) error
 }
 
 // Public methods for various types of transactions.
 type TransactionService interface {
-	AccountToBudget(ctx context.Context, accountUuid [16]byte, budgetUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
-	BudgetToAccount(ctx context.Context, accountUuid [16]byte, budgetUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
-	AccountToAccount(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
-	BudgetToBudget(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
-	RootAccountToAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
-	AccountToRootAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error)
-	GetAllAccountTransfers(ctx context.Context, accountUuid [16]byte) ([]tb.Transfer, constants.TransactionStatus, error)
-	GetAllBudgetTransfers(ctx context.Context, budgetUuid [16]byte) ([]tb.Transfer, constants.TransactionStatus, error)
+	AccountToBudget(
+		ctx context.Context,
+		accountUuid [16]byte,
+		budgetUuid [16]byte,
+		amount uint64,
+	) ([16]byte, constants.TransactionStatus, error)
+	BudgetToAccount(
+		ctx context.Context,
+		accountUuid [16]byte,
+		budgetUuid [16]byte,
+		amount uint64,
+	) ([16]byte, constants.TransactionStatus, error)
+	AccountToAccount(
+		ctx context.Context,
+		payer [16]byte,
+		payee [16]byte,
+		amount uint64,
+	) ([16]byte, constants.TransactionStatus, error)
+	BudgetToBudget(
+		ctx context.Context,
+		payer [16]byte,
+		payee [16]byte,
+		amount uint64,
+	) ([16]byte, constants.TransactionStatus, error)
+	RootAccountToAccount(
+		ctx context.Context,
+		accountUuid [16]byte,
+		amount uint64,
+	) ([16]byte, constants.TransactionStatus, error)
+	AccountToRootAccount(
+		ctx context.Context,
+		accountUuid [16]byte,
+		amount uint64,
+	) ([16]byte, constants.TransactionStatus, error)
+	GetAllAccountTransfers(
+		ctx context.Context,
+		accountUuid [16]byte,
+	) ([]tb.Transfer, constants.TransactionStatus, error)
+	GetAllBudgetTransfers(
+		ctx context.Context,
+		budgetUuid [16]byte,
+	) ([]tb.Transfer, constants.TransactionStatus, error)
 }
 
-func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string, accountType constants.AccountType) error {
+func (MMS MoneyModuleService) CreateAccount(
+	ctx context.Context,
+	uuid [16]byte,
+	name string,
+	ownerType string,
+	accountType constants.AccountType,
+) error {
 	var pgOwnerType db.OwnerType
 	if err := pgOwnerType.Scan(ownerType); err != nil {
 		return err
@@ -76,7 +127,7 @@ func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, 
 
 	// User accounts and budgets are credit-normal (balance = credits - debits).
 	// Setting DebitsMustNotExceedCredits guarantees TigerBeetle rejects any transfer
-	// that would push the balance below 0 (unlike world/liquidity pool accounts, which have Flags: 0).
+	// that would push the balance below 0 (world/liquidity pool accounts use Flags: 0).
 	newAccount := tb.Account{
 		ID:     tb.BytesToUint128(uuid),
 		Ledger: constants.RealAccountLedger,
@@ -100,17 +151,35 @@ func toProtoOwnerType(t db.OwnerType) pb.OwnerType {
 	}
 }
 
-func (MMS MoneyModuleService) ReadAccount(ctx context.Context, uuid [16]byte, accountType constants.AccountType) (pb.OwnerType, pb.UUID, pb.WalletType, string, bool, error) {
+func (MMS MoneyModuleService) ReadAccount(
+	ctx context.Context,
+	uuid [16]byte,
+	accountType constants.AccountType,
+) (pb.OwnerType, *pb.UUID, pb.WalletType, string, bool, error) {
 	//TODO: accountType not used
-	account, err := MMS.queries().ReadAccount(ctx, pgtype.UUID{Bytes: uuid, Valid: true})
+	id := pgtype.UUID{Bytes: uuid, Valid: true}
+	account, err := MMS.queries().ReadAccount(ctx, id)
 	if err != nil {
-		return pb.OwnerType_USER, pb.UUID{}, pb.WalletType_BUDGET, "", false, err
+		return pb.OwnerType_USER, nil, pb.WalletType_BUDGET, "", false, err
 	}
 
-	return toProtoOwnerType(account.OwnerType), pb.UUID{Value: account.OwnerID.Bytes[:]}, pb.WalletType_BUDGET, account.AccountName, account.ArchivedAt.Valid, nil
+	ownerID := &pb.UUID{Value: account.OwnerID.Bytes[:]}
+	return toProtoOwnerType(account.OwnerType),
+		ownerID,
+		pb.WalletType_BUDGET,
+		account.AccountName,
+		account.ArchivedAt.Valid,
+		nil
 }
 
-func (MMS MoneyModuleService) UpdateAccount(ctx context.Context, uuid [16]byte, ownerType string, owerId [16]byte, walletName string, accountType constants.AccountType) error {
+func (MMS MoneyModuleService) UpdateAccount(
+	ctx context.Context,
+	uuid [16]byte,
+	ownerType string,
+	owerId [16]byte,
+	walletName string,
+	accountType constants.AccountType,
+) error {
 	return errors.New("Unimplemented")
 }
 
@@ -121,52 +190,150 @@ func (MMS MoneyModuleService) ArchiveAccount(ctx context.Context, uuid [16]byte)
 // --- Public Transaction Methods ---
 
 // Transfer from two accounts (i.e two accounts within the real ledger)
-func (MMS MoneyModuleService) AccountToAccount(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error) {
-	return MMS.sameLedgerTransfer(ctx, payer, payee, amount, db.AccountTypeREAL, constants.RealAccountLedger, constants.RealAccountCode)
+func (MMS MoneyModuleService) AccountToAccount(
+	ctx context.Context,
+	payer [16]byte,
+	payee [16]byte,
+	amount uint64,
+) ([16]byte, constants.TransactionStatus, error) {
+	return MMS.sameLedgerTransfer(
+		ctx,
+		payer,
+		payee,
+		amount,
+		db.AccountTypeREAL,
+		constants.RealAccountLedger,
+		constants.RealAccountCode,
+	)
 }
 
-// Transfer from two budgets (i.e two accounts within the budgers ledger)
-func (MMS MoneyModuleService) BudgetToBudget(ctx context.Context, payer [16]byte, payee [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error) {
-	return MMS.sameLedgerTransfer(ctx, payer, payee, amount, db.AccountTypeVIRTUAL, constants.VirtualAccountLedger, constants.VirtualAccountCode)
+// Transfer from two budgets (i.e two accounts within the virtual ledger)
+func (MMS MoneyModuleService) BudgetToBudget(
+	ctx context.Context,
+	payer [16]byte,
+	payee [16]byte,
+	amount uint64,
+) ([16]byte, constants.TransactionStatus, error) {
+	return MMS.sameLedgerTransfer(
+		ctx,
+		payer,
+		payee,
+		amount,
+		db.AccountTypeVIRTUAL,
+		constants.VirtualAccountLedger,
+		constants.VirtualAccountCode,
+	)
 }
 
 // Transfer from account to budget, note we go over a ledger for this
-func (MMS MoneyModuleService) AccountToBudget(ctx context.Context, accountUuid [16]byte, budgetUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error) {
+func (MMS MoneyModuleService) AccountToBudget(
+	ctx context.Context,
+	accountUuid [16]byte,
+	budgetUuid [16]byte,
+	amount uint64,
+) ([16]byte, constants.TransactionStatus, error) {
 	return MMS.crossLedgerTransfer(
 		ctx,
-		accountUuid, db.AccountTypeREAL, constants.RealAccountLedger, constants.RealAccountCode, constants.GetRealLedgerLiquidityBookId(),
-		budgetUuid, db.AccountTypeVIRTUAL, constants.VirtualAccountLedger, constants.VirtualAccountCode, constants.GetVirtualLedgerLiquidityBookId(),
+		ledgerEndpoint{
+			id:     accountUuid,
+			typ:    db.AccountTypeREAL,
+			ledger: constants.RealAccountLedger,
+			code:   constants.RealAccountCode,
+			poolID: constants.GetRealLedgerLiquidityBookId(),
+		},
+		ledgerEndpoint{
+			id:     budgetUuid,
+			typ:    db.AccountTypeVIRTUAL,
+			ledger: constants.VirtualAccountLedger,
+			code:   constants.VirtualAccountCode,
+			poolID: constants.GetVirtualLedgerLiquidityBookId(),
+		},
 		amount,
 	)
 }
 
-// Transfer from a ledger to budget, note we go over a ledger for this
-func (MMS MoneyModuleService) BudgetToAccount(ctx context.Context, accountUuid [16]byte, budgetUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error) {
+// Transfer from budget to account, note we go over a ledger for this
+func (MMS MoneyModuleService) BudgetToAccount(
+	ctx context.Context,
+	accountUuid [16]byte,
+	budgetUuid [16]byte,
+	amount uint64,
+) ([16]byte, constants.TransactionStatus, error) {
 	return MMS.crossLedgerTransfer(
 		ctx,
-		budgetUuid, db.AccountTypeVIRTUAL, constants.VirtualAccountLedger, constants.VirtualAccountCode, constants.GetVirtualLedgerLiquidityBookId(),
-		accountUuid, db.AccountTypeREAL, constants.RealAccountLedger, constants.RealAccountCode, constants.GetRealLedgerLiquidityBookId(),
+		ledgerEndpoint{
+			id:     budgetUuid,
+			typ:    db.AccountTypeVIRTUAL,
+			ledger: constants.VirtualAccountLedger,
+			code:   constants.VirtualAccountCode,
+			poolID: constants.GetVirtualLedgerLiquidityBookId(),
+		},
+		ledgerEndpoint{
+			id:     accountUuid,
+			typ:    db.AccountTypeREAL,
+			ledger: constants.RealAccountLedger,
+			code:   constants.RealAccountCode,
+			poolID: constants.GetRealLedgerLiquidityBookId(),
+		},
 		amount,
 	)
 }
 
-func (MMS MoneyModuleService) RootAccountToAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error) {
-	return MMS.sameLedgerTransfer(ctx, constants.GetRealLedgerWorldBookId().Bytes(), accountUuid, amount, db.AccountTypeREAL, constants.RealAccountLedger, constants.RealAccountCode)
+func (MMS MoneyModuleService) RootAccountToAccount(
+	ctx context.Context,
+	accountUuid [16]byte,
+	amount uint64,
+) ([16]byte, constants.TransactionStatus, error) {
+	return MMS.sameLedgerTransfer(
+		ctx,
+		constants.GetRealLedgerWorldBookId().Bytes(),
+		accountUuid,
+		amount,
+		db.AccountTypeREAL,
+		constants.RealAccountLedger,
+		constants.RealAccountCode,
+	)
 }
 
-func (MMS MoneyModuleService) AccountToRootAccount(ctx context.Context, accountUuid [16]byte, amount uint64) ([16]byte, constants.TransactionStatus, error) {
-	return MMS.sameLedgerTransfer(ctx, accountUuid, constants.GetRealLedgerWorldBookId().Bytes(), amount, db.AccountTypeREAL, constants.RealAccountLedger, constants.RealAccountCode)
+func (MMS MoneyModuleService) AccountToRootAccount(
+	ctx context.Context,
+	accountUuid [16]byte,
+	amount uint64,
+) ([16]byte, constants.TransactionStatus, error) {
+	return MMS.sameLedgerTransfer(
+		ctx,
+		accountUuid,
+		constants.GetRealLedgerWorldBookId().Bytes(),
+		amount,
+		db.AccountTypeREAL,
+		constants.RealAccountLedger,
+		constants.RealAccountCode,
+	)
 }
 
-func (MMS MoneyModuleService) GetAllAccountTransfers(ctx context.Context, accountUuid [16]byte) ([]tb.Transfer, constants.TransactionStatus, error) {
+func (MMS MoneyModuleService) GetAllAccountTransfers(
+	ctx context.Context,
+	accountUuid [16]byte,
+) ([]tb.Transfer, constants.TransactionStatus, error) {
 	return MMS.getAccountTransfers(ctx, accountUuid, db.AccountTypeREAL, "account")
 }
 
-func (MMS MoneyModuleService) GetAllBudgetTransfers(ctx context.Context, budgetUuid [16]byte) ([]tb.Transfer, constants.TransactionStatus, error) {
+func (MMS MoneyModuleService) GetAllBudgetTransfers(
+	ctx context.Context,
+	budgetUuid [16]byte,
+) ([]tb.Transfer, constants.TransactionStatus, error) {
 	return MMS.getAccountTransfers(ctx, budgetUuid, db.AccountTypeVIRTUAL, "budget")
 }
 
 // --- Shared Transaction Helpers ---
+
+type ledgerEndpoint struct {
+	id     [16]byte
+	typ    db.AccountType
+	ledger uint32
+	code   uint16
+	poolID tb.Uint128
+}
 
 func (MMS MoneyModuleService) getAccountTransfers(
 	ctx context.Context,
@@ -174,7 +341,15 @@ func (MMS MoneyModuleService) getAccountTransfers(
 	expectedType db.AccountType,
 	role string,
 ) ([]tb.Transfer, constants.TransactionStatus, error) {
-	if status, err := MMS.validateAccount(ctx, id, expectedType, role, constants.TransactionAccountNotFound, constants.TransactionAccountArchived); err != nil {
+	status, err := MMS.validateAccount(
+		ctx,
+		id,
+		expectedType,
+		role,
+		constants.TransactionAccountNotFound,
+		constants.TransactionAccountArchived,
+	)
+	if err != nil {
 		return nil, status, err
 	}
 
@@ -187,23 +362,31 @@ func (MMS MoneyModuleService) getAccountTransfers(
 		}.ToUint32(),
 	})
 	if err != nil {
-		return nil, constants.TransactionInternalError, fmt.Errorf("failed to fetch %s transfers: %w", role, err)
+		return nil,
+			constants.TransactionInternalError,
+			fmt.Errorf("failed to fetch %s transfers: %w", role, err)
 	}
 	return transfers, constants.TransactionSuccess, nil
 }
 
 // helper to validate that a transfer has valid arguments
-func validateTransferArgs(payer, payee [16]byte, amount uint64) (constants.TransactionStatus, error) {
+func validateTransferArgs(
+	payer, payee [16]byte,
+	amount uint64,
+) (constants.TransactionStatus, error) {
 	if amount == 0 {
-		return constants.TransactionInvalidAmount, errors.New("transfer amount must be greater than zero")
+		return constants.TransactionInvalidAmount,
+			errors.New("transfer amount must be greater than zero")
 	}
 	if payer == payee {
-		return constants.TransactionSameAccount, errors.New("payer and payee accounts must be different")
+		return constants.TransactionSameAccount,
+			errors.New("payer and payee accounts must be different")
 	}
 	return constants.TransactionSuccess, nil
 }
 
-// helper to check that an account/budget exists, is not archived, and matches expectedType
+// helper to check that an account/budget exists, is not archived,
+// and matches expectedType
 func (MMS MoneyModuleService) validateAccount(
 	ctx context.Context,
 	id [16]byte,
@@ -212,30 +395,49 @@ func (MMS MoneyModuleService) validateAccount(
 	notFoundStatus constants.TransactionStatus,
 	archivedStatus constants.TransactionStatus,
 ) (constants.TransactionStatus, error) {
-	details, err := MMS.queries().ReadAccount(ctx, pgtype.UUID{Bytes: id, Valid: true})
+	pgID := pgtype.UUID{Bytes: id, Valid: true}
+	details, err := MMS.queries().ReadAccount(ctx, pgID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return notFoundStatus, fmt.Errorf("%s account not found: %w", role, err)
 		}
-		return constants.TransactionInternalError, fmt.Errorf("failed to read %s account: %w", role, err)
+		return constants.TransactionInternalError,
+			fmt.Errorf("failed to read %s account: %w", role, err)
 	}
 	if details.ArchivedAt.Valid {
 		return archivedStatus, fmt.Errorf("%s account is archived", role)
 	}
 	if !details.AccountType.Valid {
-		panic(fmt.Sprintf("invariant violation: %s account_type is NULL in postgres", role))
+		panic(fmt.Sprintf(
+			"invariant violation: %s account_type is NULL in postgres",
+			role,
+		))
 	}
 	if details.AccountType.AccountType != expectedType {
-		return constants.TransactionInvalidAccountType, fmt.Errorf("%s account has invalid type %s (expected %s)", role, details.AccountType.AccountType, expectedType)
+		return constants.TransactionInvalidAccountType, fmt.Errorf(
+			"%s account has invalid type %s (expected %s)",
+			role,
+			details.AccountType.AccountType,
+			expectedType,
+		)
 	}
 	return constants.TransactionSuccess, nil
 }
 
 // helper to check that a liquidity pool is in a valid state
-func (MMS MoneyModuleService) mustReadLiquidityPool(ctx context.Context, id tb.Uint128, label string) db.Account {
-	pool, err := MMS.queries().ReadAccount(ctx, pgtype.UUID{Bytes: id.Bytes(), Valid: true})
+func (MMS MoneyModuleService) mustReadLiquidityPool(
+	ctx context.Context,
+	id tb.Uint128,
+	label string,
+) db.Account {
+	pgID := pgtype.UUID{Bytes: id.Bytes(), Valid: true}
+	pool, err := MMS.queries().ReadAccount(ctx, pgID)
 	if err != nil {
-		panic(fmt.Sprintf("invariant violation: %s liquidity pool missing in postgres: %v", label, err))
+		panic(fmt.Sprintf(
+			"invariant violation: %s liquidity pool missing in postgres: %v",
+			label,
+			err,
+		))
 	}
 	return pool
 }
@@ -251,15 +453,31 @@ func (MMS MoneyModuleService) sameLedgerTransfer(
 	if status, err := validateTransferArgs(payer, payee, amount); err != nil {
 		return [16]byte{}, status, err
 	}
-	if status, err := MMS.validateAccount(ctx, payer, expectedType, "payer", constants.TransactionPayerNotFound, constants.TransactionPayerArchived); err != nil {
+	status, err := MMS.validateAccount(
+		ctx,
+		payer,
+		expectedType,
+		"payer",
+		constants.TransactionPayerNotFound,
+		constants.TransactionPayerArchived,
+	)
+	if err != nil {
 		return [16]byte{}, status, err
 	}
-	if status, err := MMS.validateAccount(ctx, payee, expectedType, "payee", constants.TransactionPayeeNotFound, constants.TransactionPayeeArchived); err != nil {
+	status, err = MMS.validateAccount(
+		ctx,
+		payee,
+		expectedType,
+		"payee",
+		constants.TransactionPayeeNotFound,
+		constants.TransactionPayeeArchived,
+	)
+	if err != nil {
 		return [16]byte{}, status, err
 	}
 
 	txID := tb.ID()
-	status, err := MMS.executeTransfers([]tb.Transfer{
+	status, err = MMS.executeTransfers([]tb.Transfer{
 		{
 			ID:              txID,
 			DebitAccountID:  tb.BytesToUint128(payer),
@@ -279,53 +497,67 @@ func (MMS MoneyModuleService) sameLedgerTransfer(
 // Helper to transfer between two ledgers
 func (MMS MoneyModuleService) crossLedgerTransfer(
 	ctx context.Context,
-	fromID [16]byte, fromType db.AccountType, fromLedger uint32, fromCode uint16, fromPoolID tb.Uint128,
-	toID [16]byte, toType db.AccountType, toLedger uint32, toCode uint16, toPoolID tb.Uint128,
+	from ledgerEndpoint,
+	to ledgerEndpoint,
 	amount uint64,
 ) ([16]byte, constants.TransactionStatus, error) {
-	// In tigerbeetle tigerbeetle::accounts cannot transfer to tigerbeetle::accounts on other ledgers
-	// As such on each ledger, there is a dedicated account called the "liquidity pool"
-	// The liquidity pool represents a "portal" into an other ledger
-	// So say we are transfering between accounts A and B which are in ledgers 1 and 2.
-	// Then we begin by transfering A into ledger 1s liquidity pool
-	// If this is valid, we then transfer from ledger 2s liquidity pool into B
-	// If any transaction is invalid we rollback all of the changes
-	if status, err := validateTransferArgs(fromID, toID, amount); err != nil {
+	// In TigerBeetle, accounts cannot transfer to accounts on other ledgers.
+	// Each ledger has a dedicated "liquidity pool" account acting as a bridge.
+	// Say we are transferring between accounts A and B in ledgers 1 and 2:
+	// we begin by transferring A into ledger 1's liquidity pool; if valid,
+	// we transfer from ledger 2's liquidity pool into B.
+	// If either transfer is invalid, TigerBeetle rolls back both atomically.
+	if status, err := validateTransferArgs(from.id, to.id, amount); err != nil {
 		return [16]byte{}, status, err
 	}
-	if status, err := MMS.validateAccount(ctx, fromID, fromType, "payer", constants.TransactionPayerNotFound, constants.TransactionPayerArchived); err != nil {
+	status, err := MMS.validateAccount(
+		ctx,
+		from.id,
+		from.typ,
+		"payer",
+		constants.TransactionPayerNotFound,
+		constants.TransactionPayerArchived,
+	)
+	if err != nil {
 		return [16]byte{}, status, err
 	}
-	fromPool := MMS.mustReadLiquidityPool(ctx, fromPoolID, string(fromType))
-	toPool := MMS.mustReadLiquidityPool(ctx, toPoolID, string(toType))
-	if status, err := MMS.validateAccount(ctx, toID, toType, "payee", constants.TransactionPayeeNotFound, constants.TransactionPayeeArchived); err != nil {
+	fromPool := MMS.mustReadLiquidityPool(ctx, from.poolID, string(from.typ))
+	toPool := MMS.mustReadLiquidityPool(ctx, to.poolID, string(to.typ))
+	status, err = MMS.validateAccount(
+		ctx,
+		to.id,
+		to.typ,
+		"payee",
+		constants.TransactionPayeeNotFound,
+		constants.TransactionPayeeArchived,
+	)
+	if err != nil {
 		return [16]byte{}, status, err
 	}
 
 	// Shared logical transaction ID stored in UserData128 on both linked legs
 	// so both TigerBeetle transfers correlate to a single transaction_id.
 	txID := tb.ID()
-	status, err := MMS.executeTransfers([]tb.Transfer{
+	status, err = MMS.executeTransfers([]tb.Transfer{
 		{
 			ID:              tb.ID(),
-			DebitAccountID:  tb.BytesToUint128(fromID),
+			DebitAccountID:  tb.BytesToUint128(from.id),
 			CreditAccountID: tb.BytesToUint128(fromPool.ID.Bytes),
 			Amount:          tb.ToUint128(amount),
 			UserData128:     txID,
-			Ledger:          fromLedger,
-			Code:            fromCode,
-			// Setting "Linked = true" links this transfer with the one after it
-			// I.e treat these transfers as an atomic transaction
+			Ledger:          from.ledger,
+			Code:            from.code,
+			// Linked=true links this transfer atomically with the next one.
 			Flags: tb.TransferFlags{Linked: true}.ToUint16(),
 		},
 		{
 			ID:              tb.ID(),
 			DebitAccountID:  tb.BytesToUint128(toPool.ID.Bytes),
-			CreditAccountID: tb.BytesToUint128(toID),
+			CreditAccountID: tb.BytesToUint128(to.id),
 			Amount:          tb.ToUint128(amount),
 			UserData128:     txID,
-			Ledger:          toLedger,
-			Code:            toCode,
+			Ledger:          to.ledger,
+			Code:            to.code,
 		},
 	})
 	if err != nil {
@@ -334,13 +566,20 @@ func (MMS MoneyModuleService) crossLedgerTransfer(
 	return txID.Bytes(), status, nil
 }
 
-func (MMS MoneyModuleService) executeTransfers(transfers []tb.Transfer) (constants.TransactionStatus, error) {
+func (MMS MoneyModuleService) executeTransfers(
+	transfers []tb.Transfer,
+) (constants.TransactionStatus, error) {
 	results, err := MMS.Tb.CreateTransfers(transfers)
 	if err != nil {
-		return constants.TransactionInternalError, fmt.Errorf("failed to execute tigerbeetle transfer: %w", err)
+		return constants.TransactionInternalError,
+			fmt.Errorf("failed to execute tigerbeetle transfer: %w", err)
 	}
 	if len(results) != len(transfers) {
-		panic(fmt.Sprintf("invariant violation: expected %d tigerbeetle transfer results, got %d", len(transfers), len(results)))
+		panic(fmt.Sprintf(
+			"invariant violation: expected %d tigerbeetle transfer results, got %d",
+			len(transfers),
+			len(results),
+		))
 	}
 
 	var rootCause tb.CreateTransferStatus
@@ -364,7 +603,8 @@ func (MMS MoneyModuleService) executeTransfers(transfers []tb.Transfer) (constan
 
 	switch rootCause {
 	case tb.TransferExceedsCredits, tb.TransferExceedsDebits:
-		return constants.TransactionInsufficientFunds, fmt.Errorf("insufficient funds: %s", rootCause.String())
+		return constants.TransactionInsufficientFunds,
+			fmt.Errorf("insufficient funds: %s", rootCause.String())
 	case tb.TransferDebitAccountNotFound,
 		tb.TransferCreditAccountNotFound,
 		tb.TransferDebitAccountAlreadyClosed,
@@ -372,9 +612,12 @@ func (MMS MoneyModuleService) executeTransfers(transfers []tb.Transfer) (constan
 		tb.TransferAccountsMustHaveTheSameLedger,
 		tb.TransferTransferMustHaveTheSameLedgerAsAccounts:
 		panic(fmt.Sprintf("postgres/tigerbeetle desync: %s", rootCause.String()))
-	case tb.TransferAccountsMustBeDifferent, tb.TransferExists, tb.TransferLinkedEventChainOpen:
+	case tb.TransferAccountsMustBeDifferent,
+		tb.TransferExists,
+		tb.TransferLinkedEventChainOpen:
 		panic(fmt.Sprintf("invariant violation: %s", rootCause.String()))
 	default:
-		return constants.TransactionTransferFailed, fmt.Errorf("tigerbeetle transfer failed: %s", rootCause.String())
+		return constants.TransactionTransferFailed,
+			fmt.Errorf("tigerbeetle transfer failed: %s", rootCause.String())
 	}
 }
