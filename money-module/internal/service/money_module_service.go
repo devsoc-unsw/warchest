@@ -23,6 +23,7 @@ type AccountService interface {
 }
 
 func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string, accountType constants.AccountType) error {
+	//TODO: accountType not used
 	var pgOwnerType db.OwnerType
 	err := pgOwnerType.Scan(ownerType)
 	if err != nil {
@@ -59,6 +60,7 @@ func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, 
 
 // TODO: Assert that we actually get a budget/account back
 func (MMS MoneyModuleService) GetDetails(ctx context.Context, uuid [16]byte, accountType constants.AccountType) (pb.OwnerType, pb.UUID, pb.WalletType, string, bool, error) {
+	//TODO: accountType not used
 	queries := db.New(MMS.Pg)
 
 	account, err := queries.ReadAccount(ctx, pgtype.UUID{Bytes: uuid, Valid: true})
@@ -74,13 +76,15 @@ func (MMS MoneyModuleService) GetDetails(ctx context.Context, uuid [16]byte, acc
 
 func (MMS MoneyModuleService) UpdateDetails(ctx context.Context, uuid [16]byte, ownerType string, onwerId [16]byte, walletName string, accountType constants.AccountType) error {
 	//TODO: Do not know what to do here
+	//TODO: accountType not used
+	queries := db.New(MMS.Pg)
 }
 
 //transaction_id, status, err := h.Svc.Transaction(req.PayeeId, req.PayerId, req.Amount, false, true)
 
 // TODO: Check return values for this function
-func (MMS MoneyModuleService) Transaction(payer_id [16]byte, payee_id [16]byte, amount uint64, PayerType constants.AccountType, PayeeType constants.AccountType) ([16]byte, status, error) {
-
+func (MMS MoneyModuleService) Transaction(payer_id *[16]byte, payee_id *[16]byte, amount uint64, PayerType constants.AccountType, PayeeType constants.AccountType) ([16]byte, pb.Status, error) {
+	//TODO: PayerType, PayeeType not used
 	/*type Transfer struct {
 		ID              Uint128
 		DebitAccountID  Uint128
@@ -96,7 +100,17 @@ func (MMS MoneyModuleService) Transaction(payer_id [16]byte, payee_id [16]byte, 
 		Flags           uint16
 		Timestamp       uint64
 	}*/
-	NewTransfer := tb.Transfer{}
+	if payer_id == nil {
+
+	} else {
+
+	}
+	if payee_id == nil {
+
+	} else {
+
+	}
+	NewTransfer := tb.Transfer{ID: uuid, DebitAccountID: debit_uuid, CreditAccountID: credit_uuid, Amount: amount}
 
 	var transfers = []tb.Account{NewTransfer}
 	MMS.Tb.CreateTransfers(transfers)
@@ -104,6 +118,13 @@ func (MMS MoneyModuleService) Transaction(payer_id [16]byte, payee_id [16]byte, 
 }
 
 func (MMS MoneyModuleService) GetTransfers(ctx context.Context, uuid [16]byte, accountType constants.AccountType) ([]tb.Transfer, error) {
+	//TODO: accountType not used
+	//TODO: Finish
+
+}
+
+func (MMS MoneyModuleService) ArchiveAccount(ctx context.Context, uuid [16]byte, accountType constants.AccountType) error {
+	//TODO: accountType not used
 	//TODO: Finish
 
 }
