@@ -22,7 +22,7 @@ type AccountService interface {
 	CreateAccount(ctx context.Context, uuid tb.Uint128) error
 }
 
-func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string, accountType constants.AccountType) error {
+func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, name string, ownerType string) error {
 	var pgOwnerType db.OwnerType
 	err := pgOwnerType.Scan(ownerType)
 	if err != nil {
@@ -57,6 +57,17 @@ func (MMS MoneyModuleService) CreateAccount(ctx context.Context, uuid [16]byte, 
 	return nil
 }
 
+func toProtoOwnerType(t db.OwnerType) pb.OwnerType {
+	switch t {
+	case db.OwnerTypeUSER:
+		return pb.OwnerType_USER 
+	case db.OwnerTypeORGANISATION:
+		return pb.OwnerType_ORG
+	default:
+		panic("unsupported owner type: " + t)
+	}
+}
+
 // TODO: Assert that we actually get a budget/account back
 func (MMS MoneyModuleService) GetDetails(ctx context.Context, uuid [16]byte, accountType constants.AccountType) (pb.OwnerType, pb.UUID, pb.WalletType, string, bool, error) {
 	queries := db.New(MMS.Pg)
@@ -67,13 +78,13 @@ func (MMS MoneyModuleService) GetDetails(ctx context.Context, uuid [16]byte, acc
 	}
 
 	//ownerType, ownerId, walletType, walletName, isArchived, err
-	//TODO: Determine how to check if archived
-	return account.OwnerType, account.OwnerID.Bytes, pb.WalletType_BUDGET, account.AccountName, false, nil
 
+	return toProtoOwnerType(account.OwnerType), pb.UUID{Value: account.OwnerID.Bytes[:]}, pb.WalletType_BUDGET, account.AccountName, account.ArchivedAt.Valid, nil
 }
 
 func (MMS MoneyModuleService) UpdateDetails(ctx context.Context, uuid [16]byte, ownerType string, onwerId [16]byte, walletName string, accountType constants.AccountType) error {
 	//TODO: Do not know what to do here
+	
 }
 
 //transaction_id, status, err := h.Svc.Transaction(req.PayeeId, req.PayerId, req.Amount, false, true)
